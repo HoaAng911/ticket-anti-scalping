@@ -1,0 +1,681 @@
+/* AdminLTE-inspired panel — riêng biệt với giao diện người dùng */
+@import url("https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&display=swap");
+
+/* Biến dùng chung cho dashboard (.lte-root) và trang đăng nhập (.lte-login-wrap) */
+.lte-root,
+.lte-login-wrap {
+  --lte-sidebar: #1e282c;
+  --lte-sidebar-dark: #151b1e;
+  --lte-accent: #3c8dbc;
+  --lte-accent-dark: #367fa9;
+  --lte-bg: #ecf0f5;
+  --lte-header: #fff;
+  --lte-text: #444;
+  --lte-muted: #6c757d;
+  --lte-border: #d2d6de;
+  --lte-green: #00a65a;
+  --lte-yellow: #f39c12;
+  --lte-red: #dd4b39;
+  --lte-aqua: #00c0ef;
+  --lte-navy: #001f3f;
+}
+
+.lte-root {
+  font-family: "Source Sans 3", system-ui, sans-serif;
+  min-height: 100vh;
+  background: var(--lte-bg);
+  color: var(--lte-text);
+  display: flex;
+}
+
+.lte-sidebar {
+  width: 230px;
+  flex-shrink: 0;
+  background: var(--lte-sidebar);
+  color: #b8c7ce;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  transition: width 0.22s ease;
+}
+
+.lte-brand-row {
+  display: flex;
+  align-items: center;
+  background: var(--lte-sidebar-dark);
+  min-height: 50px;
+}
+
+.lte-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.95rem 0.75rem 0.95rem 1rem;
+  background: transparent;
+  color: #fff;
+  font-weight: 700;
+  font-size: 1.15rem;
+  text-decoration: none;
+  flex: 1;
+  min-width: 0;
+}
+
+.lte-brand span {
+  color: #8ad4ff;
+}
+
+.lte-brand-text {
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.lte-sidebar-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.lte-sidebar-toggle:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.lte-sidebar-toggle.in-sidebar {
+  color: #c2c7ce;
+  margin-right: 0.45rem;
+}
+
+.lte-sidebar-toggle.in-topbar {
+  color: #555;
+  border-color: #d2d6de;
+  background: #f4f4f4;
+}
+
+.lte-sidebar-toggle.in-topbar:hover {
+  background: #e7e7e7;
+}
+
+.lte-user-panel {
+  padding: 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.lte-user-meta {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.lte-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3c8dbc, #00c0ef);
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-weight: 700;
+}
+
+.lte-user-panel small {
+  display: block;
+  color: #7a8a92;
+  font-size: 0.75rem;
+}
+
+.lte-user-panel strong {
+  color: #fff;
+  font-size: 0.9rem;
+}
+
+.lte-menu {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+}
+
+.lte-menu-header {
+  padding: 0.75rem 1rem 0.35rem;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #4b646f;
+}
+
+.lte-menu button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.7rem 1rem;
+  border: 0;
+  background: transparent;
+  color: #b8c7ce;
+  font: inherit;
+  font-size: 0.92rem;
+  text-align: left;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  white-space: nowrap;
+}
+
+.lte-menu button:hover {
+  background: #1a2226;
+  color: #fff;
+}
+
+.lte-menu button.active {
+  background: #1a2226;
+  color: #fff;
+  border-left-color: var(--lte-accent);
+}
+
+.lte-menu-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lte-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  transition: margin 0.22s ease;
+}
+
+.lte-topbar {
+  height: 50px;
+  background: var(--lte-header);
+  border-bottom: 1px solid var(--lte-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1rem;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  gap: 0.75rem;
+}
+
+.lte-topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.lte-topbar h1 {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.lte-top-actions {
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+/* ---- Sidebar thu gọn (icon-only) ---- */
+.lte-root.sidebar-collapsed .lte-sidebar {
+  width: 64px;
+}
+
+.lte-root.sidebar-collapsed .lte-brand {
+  justify-content: center;
+  padding: 0.95rem 0.35rem;
+  flex: 1;
+}
+
+.lte-root.sidebar-collapsed .lte-brand-text,
+.lte-root.sidebar-collapsed .lte-user-meta,
+.lte-root.sidebar-collapsed .lte-menu-header,
+.lte-root.sidebar-collapsed .lte-menu-label {
+  display: none;
+}
+
+.lte-root.sidebar-collapsed .lte-brand-row {
+  flex-direction: column;
+  padding-bottom: 0.35rem;
+}
+
+.lte-root.sidebar-collapsed .lte-sidebar-toggle.in-sidebar {
+  margin: 0 auto 0.35rem;
+}
+
+.lte-root.sidebar-collapsed .lte-user-panel {
+  justify-content: center;
+  padding: 0.75rem 0.35rem;
+}
+
+.lte-root.sidebar-collapsed .lte-menu button {
+  justify-content: center;
+  padding: 0.75rem 0.4rem;
+  gap: 0;
+}
+
+.lte-root.sidebar-collapsed .lte-menu button.active {
+  border-left-color: transparent;
+  box-shadow: inset 3px 0 0 var(--lte-accent);
+}
+
+.lte-content {
+  padding: 1rem 1.25rem 2rem;
+}
+
+.lte-breadcrumb {
+  color: var(--lte-muted);
+  font-size: 0.85rem;
+  margin-bottom: 0.85rem;
+}
+
+.lte-alert {
+  padding: 0.75rem 1rem;
+  border-radius: 3px;
+  margin-bottom: 1rem;
+  border: 1px solid transparent;
+}
+
+.lte-alert.ok {
+  background: #dff0d8;
+  border-color: #d6e9c6;
+  color: #3c763d;
+}
+
+.lte-alert.err {
+  background: #f2dede;
+  border-color: #ebccd1;
+  color: #a94442;
+}
+
+.lte-info-boxes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.85rem;
+  margin-bottom: 1.1rem;
+}
+
+.lte-info-box {
+  display: flex;
+  min-height: 88px;
+  background: #fff;
+  border-radius: 3px;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.lte-info-box .icon {
+  width: 88px;
+  display: grid;
+  place-items: center;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.lte-info-box .icon.bg-aqua { background: var(--lte-aqua); }
+.lte-info-box .icon.bg-green { background: var(--lte-green); }
+.lte-info-box .icon.bg-yellow { background: var(--lte-yellow); }
+.lte-info-box .icon.bg-red { background: var(--lte-red); }
+.lte-info-box .icon.bg-blue { background: var(--lte-accent); }
+
+.lte-info-box .content {
+  padding: 0.65rem 0.85rem;
+  flex: 1;
+}
+
+.lte-info-box .content span {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--lte-muted);
+}
+
+.lte-info-box .content strong {
+  font-size: 1.55rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.lte-box {
+  background: #fff;
+  border-top: 3px solid var(--lte-accent);
+  border-radius: 3px;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
+  margin-bottom: 1rem;
+}
+
+.lte-box.box-success { border-top-color: var(--lte-green); }
+.lte-box.box-warning { border-top-color: var(--lte-yellow); }
+.lte-box.box-danger { border-top-color: var(--lte-red); }
+
+.lte-box-header {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #f4f4f4;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.lte-box-header h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.lte-box-body {
+  padding: 1rem;
+}
+
+.lte-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid transparent;
+  padding: 0.4rem 0.75rem;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  border-radius: 3px;
+  cursor: pointer;
+  background: #f4f4f4;
+  color: #444;
+}
+
+.lte-btn-primary {
+  background: var(--lte-accent);
+  color: #fff;
+}
+
+.lte-btn-primary:hover {
+  background: var(--lte-accent-dark);
+}
+
+.lte-btn-success {
+  background: var(--lte-green);
+  color: #fff;
+}
+
+.lte-btn-default {
+  background: #f4f4f4;
+  border-color: #ddd;
+}
+
+.lte-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.lte-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.lte-table th,
+.lte-table td {
+  padding: 0.55rem 0.5rem;
+  border-bottom: 1px solid #f4f4f4;
+  text-align: left;
+  vertical-align: top;
+}
+
+.lte-table th {
+  background: #fafafa;
+  color: #555;
+  font-weight: 600;
+}
+
+.lte-table .mono {
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 0.8em;
+  word-break: break-all;
+}
+
+.lte-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-width: 720px;
+}
+
+.lte-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.88rem;
+  color: #555;
+  font-weight: 600;
+}
+
+.lte-form input,
+.lte-form textarea,
+.lte-form select {
+  font: inherit;
+  font-weight: 400;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid #d2d6de;
+  border-radius: 3px;
+  background: #fff;
+  color: #444;
+}
+
+.lte-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.lte-tier-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.lte-tier-row {
+  border: 1px solid #e7e7e7;
+  border-radius: 3px;
+  padding: 0.75rem;
+  background: #fafafa;
+}
+
+.lte-tier-row .lte-tier-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.lte-tier-row .lte-form-grid {
+  grid-template-columns: 1.2fr 1fr 1fr 0.9fr;
+}
+
+@media (max-width: 960px) {
+  .lte-tier-row .lte-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.lte-help {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--lte-muted);
+  font-weight: 400;
+}
+
+.lte-login-wrap {
+  min-height: 100vh;
+  width: 100%;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(ellipse at 20% 0%, #3c8dbc55, transparent 50%),
+    linear-gradient(160deg, #1e282c 0%, #2c3b41 45%, #1a2226 100%);
+  font-family: "Source Sans 3", system-ui, sans-serif;
+  color: var(--lte-text);
+  padding: 1.5rem;
+  box-sizing: border-box;
+}
+
+.lte-login-card {
+  width: min(400px, 100%);
+  background: #fff;
+  border-radius: 4px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+}
+
+.lte-login-card header {
+  background: var(--lte-accent);
+  color: #fff;
+  padding: 1.25rem 1.35rem;
+}
+
+.lte-login-card header h1 {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  line-height: 1.3;
+}
+
+.lte-login-card header p {
+  margin: 0.45rem 0 0;
+  opacity: 0.92;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.lte-login-card form,
+.lte-login-card .lte-login-body {
+  padding: 1.25rem 1.35rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.lte-login-card .lte-btn-primary {
+  width: 100%;
+  justify-content: center;
+  padding: 0.65rem 1rem;
+  font-size: 0.95rem;
+  background: var(--lte-accent);
+  color: #fff;
+}
+
+.lte-login-card .lte-btn-primary:hover {
+  background: var(--lte-accent-dark);
+}
+
+.lte-login-card .lte-btn-default {
+  width: 100%;
+  justify-content: center;
+}
+
+.lte-login-card .lte-help {
+  color: var(--lte-muted);
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.lte-login-card .lte-help a {
+  color: var(--lte-accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.lte-login-card .lte-help a:hover {
+  text-decoration: underline;
+}
+
+.lte-login-card .lte-alert {
+  margin-bottom: 0;
+}
+
+.lte-badge {
+  display: inline-block;
+  padding: 0.15rem 0.45rem;
+  border-radius: 2px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: #d9edf7;
+  color: #31708f;
+}
+
+.lte-badge.ok { background: #dff0d8; color: #3c763d; }
+.lte-badge.warn { background: #fcf8e3; color: #8a6d3b; }
+
+.lte-event-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 0;
+  border-bottom: 1px solid #f4f4f4;
+  align-items: center;
+}
+
+.lte-event-row:last-child {
+  border-bottom: 0;
+}
+
+.lte-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.lte-tags li {
+  background: #f4f4f4;
+  border: 1px solid #e7e7e7;
+  padding: 0.15rem 0.45rem;
+  font-size: 0.78rem;
+  border-radius: 2px;
+}
+
+.lte-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+@media (max-width: 960px) {
+  .lte-root {
+    flex-direction: column;
+  }
+
+  .lte-sidebar {
+    width: 100%;
+    height: auto;
+    position: relative;
+  }
+
+  /* Mobile: thu gọn = ẩn sidebar, mở lại bằng nút trên topbar */
+  .lte-root.sidebar-collapsed .lte-sidebar {
+    display: none;
+  }
+
+  .lte-split,
+  .lte-form-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "network": {
+    "name": "Ticket Private Clique",
+    "chainId": 12345,
+    "rpcNode1": "http://127.0.0.1:8545",
+    "rpcNode2": "http://127.0.0.1:8546",
+    "wsNode1": "ws://127.0.0.1:8555",
+    "wsNode2": "ws://127.0.0.1:8556",
+    "periodSeconds": 5
+  },
+  "accounts": {
+    "signer1": {
+      "address": "0xa98B089Fad3e09f069b41a50F3cb41387ba5e8A2",
+      "role": "Clique sealer (node1)",
+      "datadir": "node1"
+    },
+    "deployer": {
+      "address": "0xdecc0bf86a34de96B161b1F910ce2684d36bb4B4",
+      "role": "Deploy / test account (funded)",
+      "datadir": "node1"
+    },
+    "signer2": {
+      "address": "0xd07f0A707A3A6eA439a2B8cb18A7dA016A6056B4",
+      "role": "Clique sealer (node2)",
+      "datadir": "node2"
+    }
+  },
+  "passwordFile": "password.txt",
+  "note": "Mỗi tài khoản nhận ~1,000,000 ETH trong genesis alloc. Keystore nằm trong node1/keystore và node2/keystore (không commit)."
+}

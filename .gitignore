@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Build output
+dist/
+build/
+frontend/dist/
+
+# Hardhat
+smart-contract/cache/
+smart-contract/artifacts/
+smart-contract/typechain-types/
+smart-contract/coverage/
+smart-contract/coverage.json
+
+# Logs
+*.log
+npm-debug.log*
+
+# Geth private network
+blockchain/private-net/node1/
+blockchain/private-net/node2/
+blockchain/private-net/password.txt
+blockchain/private-net/keystore/
+blockchain/private-net/logs/
+
+# Editor
+.vscode/
+.idea/
+.DS_Store

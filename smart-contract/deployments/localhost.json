@@ -1,0 +1,23 @@
+{
+  "network": "localhost",
+  "chainId": "12345",
+  "deployer": "0xdecc0bf86a34de96B161b1F910ce2684d36bb4B4",
+  "transferLockSeconds": 60,
+  "EventTicket": "0x08f81Ae2C9816C62b9d05Abc7119eb24b7310E94",
+  "Marketplace": "0x41dd5F9078a8bD81B0d058A0ad120697F5CEd183",
+  "sampleEvents": [
+    {
+      "eventChainId": 1,
+      "name": "Standard",
+      "priceEth": "0.01",
+      "totalSupply": 100
+    },
+    {
+      "eventChainId": 2,
+      "name": "VIP",
+      "priceEth": "0.05",
+      "totalSupply": 20
+    }
+  ],
+  "deployedAt": "2026-10-01T16:45:48.219Z"
+}

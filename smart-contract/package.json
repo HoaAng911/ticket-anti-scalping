@@ -1,0 +1,20 @@
+{
+  "name": "ticket-anti-scalping-contract",
+  "version": "1.0.0",
+  "description": "Smart contract bán vé NFT chống scalping trên Ethereum",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "node": "hardhat node",
+    "deploy:local": "hardhat run scripts/deploy.js --network localhost",
+    "deploy:sepolia": "hardhat run scripts/deploy.js --network sepolia",
+    "clean": "hardhat clean"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@openzeppelin/contracts": "5.0.2",
+    "dotenv": "^16.4.5",
+    "hardhat": "^2.22.10"
+  }
+}

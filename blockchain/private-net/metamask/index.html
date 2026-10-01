@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Kết nối MetaMask — Ticket Private Clique</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="wrap">
+      <header>
+        <p class="eyebrow">Ticket Anti-Scalping / private-net</p>
+        <h1>Kết nối MetaMask với mạng geth</h1>
+        <p class="lead">
+          Thêm mạng <strong>Ticket Private Clique</strong> (chainId
+          <code>12345</code>), kết nối ví, và kiểm tra RPC
+          <code>http://127.0.0.1:8545</code>.
+        </p>
+      </header>
+
+      <section class="panel">
+        <h2>Trạng thái</h2>
+        <p id="status" data-type="info">Đang khởi tạo...</p>
+        <dl class="grid">
+          <div>
+            <dt>RPC geth</dt>
+            <dd id="rpcStatus">-</dd>
+          </div>
+          <div>
+            <dt>Tài khoản</dt>
+            <dd id="accountShort">-</dd>
+          </div>
+          <div>
+            <dt>Địa chỉ đầy đủ</dt>
+            <dd id="account" class="mono">(chưa kết nối)</dd>
+          </div>
+          <div>
+            <dt>Chain ID</dt>
+            <dd id="chainId">-</dd>
+          </div>
+          <div>
+            <dt>Mạng</dt>
+            <dd id="chainOk">-</dd>
+          </div>
+          <div>
+            <dt>Số dư</dt>
+            <dd id="balance">-</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section class="panel actions">
+        <h2>Thao tác</h2>
+        <div class="buttons">
+          <button type="button" id="btnConnect" class="primary">
+            Kết nối MetaMask
+          </button>
+          <button type="button" id="btnSwitch">Thêm / chuyển mạng 12345</button>
+          <button type="button" id="btnRpc">Kiểm tra RPC geth</button>
+        </div>
+        <ol class="steps">
+          <li>Bật mạng geth: <code>./scripts/start-all.sh</code></li>
+          <li>Mở trang này qua <code>./scripts/serve-metamask.sh</code></li>
+          <li>Bấm <em>Kết nối MetaMask</em> và chấp nhận trên popup</li>
+          <li>
+            Nếu chưa có ETH: import keystore từ
+            <code>node1/keystore/</code> (xem HUONG-DAN.md)
+          </li>
+        </ol>
+      </section>
+
+      <section class="panel">
+        <h2>Tài khoản lab (alloc trong genesis)</h2>
+        <ul id="labAccounts" class="accounts"></ul>
+        <p class="note">
+          Import bằng file UTC trong <code>node1/keystore</code> /
+          <code>node2/keystore</code>, mật khẩu xem <code>password.txt</code>.
+          Chỉ dùng mạng lab cục bộ.
+        </p>
+      </section>
+
+      <footer>
+        <p>
+          Chi tiết: <code>../HUONG-DAN.md</code> — mục cài đặt, chạy mạng, MetaMask.
+        </p>
+      </footer>
+    </main>
+    <script type="module" src="./connect.js"></script>
+  </body>
+</html>
