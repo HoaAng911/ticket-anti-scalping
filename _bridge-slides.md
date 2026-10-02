@@ -152,12 +152,12 @@ Setting up source chain
 
 Câu hỏi: Bạn có token trên BNB Chain nhưng ứng dụng nằm trên Ethereum. Làm sao?
 
-| Trong đời thường | → | Trong blockchain |
+| Trong đời thường | tương ứng | Trong blockchain |
 | --- | --- | --- |
-| Bạn có tài khoản ở ngân hàng A, muốn dùng dịch vụ chỉ có ở ngân hàng B | → | Bạn có token trên Polygon, muốn dùng ứng dụng chỉ có trên Ethereum |
-| Hai ngân hàng không tự nhìn thấy sổ sách của nhau | → | Ethereum không đọc được trạng thái của Polygon và ngược lại |
-| Cần một hệ thống chuyển tiền liên ngân hàng | → | Cần một cầu nối (bridge) chuyển tài sản giữa hai chuỗi |
-| Hệ thống đó phải chắc chắn: tiền trừ ở A đúng bằng tiền cộng ở B | → | Cầu nối phải chắc: khoá bao nhiêu ở chuỗi nguồn thì đúc bấy nhiêu ở chuỗi đích |
+| Bạn có tài khoản ở ngân hàng A, muốn dùng dịch vụ chỉ có ở ngân hàng B | tương ứng | Bạn có token trên Polygon, muốn dùng ứng dụng chỉ có trên Ethereum |
+| Hai ngân hàng không tự nhìn thấy sổ sách của nhau | tương ứng | Ethereum không đọc được trạng thái của Polygon và ngược lại |
+| Cần một hệ thống chuyển tiền liên ngân hàng | tương ứng | Cần một cầu nối (bridge) chuyển tài sản giữa hai chuỗi |
+| Hệ thống đó phải chắc chắn: tiền trừ ở A đúng bằng tiền cộng ở B | tương ứng | Cầu nối phải chắc: khoá bao nhiêu ở chuỗi nguồn thì đúc bấy nhiêu ở chuỗi đích |
 
 ⚖️  Điểm khác biệt: ngân hàng có luật pháp và toà án bảo đảm. Cầu nối chỉ có mã nguồn bảo đảm, nên viết sai là mất tiền thật.
 
@@ -179,19 +179,19 @@ Không có token nào thực sự “đi qua cầu”. Token gốc bị KHOÁ l�
 
 Người dùng gửi 100 token vào hợp đồng SourceBridge, hợp đồng giữ lại.
 
-→
+Sau đó 
 
 **2. Phát tín hiệu**
 
 Hợp đồng phát ra một sự kiện ghi rõ: ai gửi, gửi cho ai, bao nhiêu.
 
-→
+Sau đó 
 
 **3. Relayer nghe được**
 
 Một chương trình chạy ngoài chuỗi bắt được sự kiện đó.
 
-→
+Sau đó 
 
 **4. Đúc ở chuỗi B**
 
@@ -357,7 +357,7 @@ Xác minh người gọi đúng là relayer, mã thông điệp chưa từng x�
 
 Giao diện cập nhật
 
-Web hiển thị: Đang chờ → Đang chuyển tiếp → Hoàn tất.
+Web hiển thị: Đang chờ rồi Đang chuyển tiếp rồi Hoàn tất.
 
 ### **Bước 1–2 chạy trên chuỗi nguồn;  bước 3–5 chạy ngoài blockchain ;  bước 6 trên chuỗi đích  ·  bước 7 trên trình duyệt**
 
@@ -373,12 +373,12 @@ Công cụ để làm dự án thật theo nhóm, bắt đầu phần thực hà
 
 **Mục 3**
 
-| Trong đời thường | → | Trong blockchain |
+| Trong đời thường | tương ứng | Trong blockchain |
 | --- | --- | --- |
-| Remix giống soạn thảo văn bản ngay trên trình duyệt | → | Hardhat giống làm việc với dự án thật trên máy: có thư mục, có Git |
-| Sửa xong không lưu lại được lịch sử | → | Mỗi thay đổi đều commit được, cả nhóm cùng làm song song |
-| Muốn kiểm thử phải bấm tay từng nút | → | Viết bài kiểm thử tự động, chạy một lệnh là kiểm tra hàng chục trường hợp |
-| Muốn deploy phải bấm và chép địa chỉ thủ công | → | Một lệnh triển khai lên bất kỳ mạng nào, có ghi nhớ địa chỉ |
+| Remix giống soạn thảo văn bản ngay trên trình duyệt | tương ứng | Hardhat giống làm việc với dự án thật trên máy: có thư mục, có Git |
+| Sửa xong không lưu lại được lịch sử | tương ứng | Mỗi thay đổi đều commit được, cả nhóm cùng làm song song |
+| Muốn kiểm thử phải bấm tay từng nút | tương ứng | Viết bài kiểm thử tự động, chạy một lệnh là kiểm tra hàng chục trường hợp |
+| Muốn deploy phải bấm và chép địa chỉ thủ công | tương ứng | Một lệnh triển khai lên bất kỳ mạng nào, có ghi nhớ địa chỉ |
 
 **YÊN TÂM**
 
@@ -647,12 +647,12 @@ Slide kỹ thuật quan trọng nhất buổi 4
 
 **Khó nhất**
 
-| Trong đời thường | → | Trong blockchain |
+| Trong đời thường | tương ứng | Trong blockchain |
 | --- | --- | --- |
-| Mỗi tấm vé xem phim có một số seri riêng | → | Mỗi lệnh chuyển mạch có một messageId riêng |
-| Soát vé xong thì đánh dấu vé đã dùng | → | Hợp đồng đích đánh dấu messageId đã xử lý |
-| Ai đưa lại đúng tấm vé đó lần hai sẽ bị từ chối | → | Gửi lại cùng messageId sẽ bị revert |
-| Số seri sinh từ: rạp nào, suất nào, ghế nào | → | messageId sinh từ: chuỗi nguồn, chuỗi đích, người gửi, người nhận, số lượng, nonce |
+| Mỗi tấm vé xem phim có một số seri riêng | tương ứng | Mỗi lệnh chuyển mạch có một messageId riêng |
+| Soát vé xong thì đánh dấu vé đã dùng | tương ứng | Hợp đồng đích đánh dấu messageId đã xử lý |
+| Ai đưa lại đúng tấm vé đó lần hai sẽ bị từ chối | tương ứng | Gửi lại cùng messageId sẽ bị revert |
+| Số seri sinh từ: rạp nào, suất nào, ghế nào | tương ứng | messageId sinh từ: chuỗi nguồn, chuỗi đích, người gửi, người nhận, số lượng, nonce |
 
 Công thức sinh messageId
 
@@ -804,13 +804,13 @@ Nho dong ngoac nhon cua
 
 contract truoc khi build.
 
-Thứ tự bắt buộc: KIỂM TRA đầu vào → GHI trạng thái (nonce, messageId) → GỌI RA NGOÀI (kéo token) → BÁO sự kiện. Đừng đảo khối 2 và khối 3.
+Thứ tự bắt buộc: KIỂM TRA đầu vào rồi GHI trạng thái (nonce, messageId) rồi GỌI RA NGOÀI (kéo token) rồi BÁO sự kiện. Đừng đảo khối 2 và khối 3.
 
 **⚠  Vì sao nonce++ đặt TRƯỚC safeTransferFrom?**  vì safeTransferFrom là lời gọi RA NGOÀI. Đặt sau là mở đường cho tấn công gọi lại — xem ô giải thích ở slide sau.
 
 **⚠  Vẫn muốn chắc chắn hơn?**  kế thừa thêm ReentrancyGuard của OpenZeppelin và đặt nonReentrant lên hàm lock.
 
-<small><span class="docvortex-page-footnote" data-block-type="page_footnote" style="color:#6b7280">Đọc chậm từng khối được đánh số 1–4. Thời lượng: 12 phút.<br>CHÚ Ý THỨ TỰ: checks → effects → interactions. Đây chính là mẫu sẽ được đặt tên ở buổi 5 khi viết mintFromSource.<br>Hỏi lớp trước: “nếu đổi chỗ khối 2 và khối 3 thì sao?” Để sinh viên nghĩ, đừng trả lời ngay — slide sau có đáp án.</span></small>
+<small><span class="docvortex-page-footnote" data-block-type="page_footnote" style="color:#6b7280">Đọc chậm từng khối được đánh số 1–4. Thời lượng: 12 phút.<br>CHÚ Ý THỨ TỰ: checks rồi effects rồi interactions. Đây chính là mẫu sẽ được đặt tên ở buổi 5 khi viết mintFromSource.<br>Hỏi lớp trước: “nếu đổi chỗ khối 2 và khối 3 thì sao?” Để sinh viên nghĩ, đừng trả lời ngay — slide sau có đáp án.</span></small>
 
 <!-- page 24 of 72 -->
 
@@ -924,7 +924,7 @@ connect(nguoiDung) = gia lap
 
 mot vi khac goi ham.
 
-Ba phần của mọi bài test: SẮP ĐẶT (triển khai, chia token) → THỰC HIỆN (gọi lock) → KIỂM CHỨNG (expect sự kiện và số dư).
+Ba phần của mọi bài test: SẮP ĐẶT (triển khai, chia token) rồi THỰC HIỆN (gọi lock) rồi KIỂM CHỨNG (expect sự kiện và số dư).
 
 **⚠  Vì sao viết test ngay từ buổi 4?**  vì điều kiện dự bảo vệ là độ phủ trên 80%. Viết dần từng buổi thì nhẹ; dồn tới buổi 7 thì không kịp.
 
@@ -1024,12 +1024,12 @@ Ví von phiếu gửi xe:  token bọc chỉ có giá trị khi token gốc th�
 
 **Mục 1**
 
-| Trong đời thường | → | Trong blockchain |
+| Trong đời thường | tương ứng | Trong blockchain |
 | --- | --- | --- |
-| Bạn gửi xe ở bãi và nhận một phiếu gửi xe | → | Bạn khoá token gốc ở chuỗi A và nhận token bọc ở chuỗi B |
-| Phiếu gửi xe không phải là chiếc xe, nhưng đổi lại được xe | → | Token bọc không phải token gốc, nhưng đổi ngược lại được |
-| Bãi xe in thêm phiếu khống thì hệ thống sụp đổ | → | Đúc token bọc mà không khoá token gốc thì cầu nối mất giá trị |
-| Ai giữ quyền in phiếu phải được kiểm soát chặt | → | Chỉ hợp đồng cầu nối mới được quyền đúc token bọc |
+| Bạn gửi xe ở bãi và nhận một phiếu gửi xe | tương ứng | Bạn khoá token gốc ở chuỗi A và nhận token bọc ở chuỗi B |
+| Phiếu gửi xe không phải là chiếc xe, nhưng đổi lại được xe | tương ứng | Token bọc không phải token gốc, nhưng đổi ngược lại được |
+| Bãi xe in thêm phiếu khống thì hệ thống sụp đổ | tương ứng | Đúc token bọc mà không khoá token gốc thì cầu nối mất giá trị |
+| Ai giữ quyền in phiếu phải được kiểm soát chặt | tương ứng | Chỉ hợp đồng cầu nối mới được quyền đúc token bọc |
 
 🎯  Đây là lý do phần lớn các vụ tấn công cầu nối đều nhắm vào một mục tiêu duy nhất: chiếm quyền đúc token bọc.
 
@@ -1281,13 +1281,13 @@ pause     - dung khan cap
 
 unpause   - mo lai
 
-Đọc chậm phần mintFromSource. Thứ tự bắt buộc: kiểm tra → ghi trạng thái → đúc token.
+Đọc chậm phần mintFromSource. Thứ tự bắt buộc: kiểm tra rồi ghi trạng thái rồi đúc token.
 
 **⚠  Đảo hai dòng processed và mint**  hàm mint có thể gọi ngược lại mintFromSource khi cờ chưa ghi — đúc được nhiều lần.
 
 **⚠  Quên whenNotPaused**  vẫn build được nhưng mất lớp bảo vệ thứ ba, và test pause() sẽ trượt.
 
-<small><span class="docvortex-page-footnote" data-block-type="page_footnote" style="color:#6b7280">Chỉ rõ thứ tự: kiểm tra → ghi trạng thái → đúc. Thời lượng: 12 phút.</span></small>
+<small><span class="docvortex-page-footnote" data-block-type="page_footnote" style="color:#6b7280">Chỉ rõ thứ tự: kiểm tra rồi ghi trạng thái rồi đúc. Thời lượng: 12 phút.</span></small>
 
 <!-- page 34 of 72 -->
 
@@ -2713,19 +2713,19 @@ Người dùng không được báo trước sẽ tưởng trang web bị treo
 
 MetaMask hiện lên lần 1: cho phép cầu nối rút token.
 
-→
+Sau đó 
 
 **2 · Khoá token**
 
 MetaMask hiện lên lần 2: xác nhận gọi hàm lock.
 
-→
+Sau đó 
 
 **3 · Chờ relayer**
 
 Giao diện hiện “Đang chuyển tiếp...” trong vài giây.
 
-→
+Sau đó 
 
 **4 · Hoàn tất**
 
@@ -3022,7 +3022,7 @@ console.error(err);   // chi tiet cho lap trinh vien
 | Hiện tượng | Nguyên nhân | Cách xử lý |
 | --- | --- | --- |
 | could not decode result data | ABI không khớp hợp đồng đã triển khai | Chép lại ABI mới từ artifacts sang src/abi |
-| Trang trắng, không có gì hiện ra | Lỗi JavaScript làm React dừng | Mở F12 → tab Console để đọc lỗi |
+| Trang trắng, không có gì hiện ra | Lỗi JavaScript làm React dừng | Mở F12 rồi tab Console để đọc lỗi |
 | call revert exception | Sai địa chỉ hợp đồng, hoặc đang ở sai mạng | Kiểm tra config.ts và mạng đang chọn trong MetaMask |
 | Số dư luôn bằng 0 | MetaMask ở mạng khác hoặc ví khác | Kiểm tra tên mạng và tài khoản đang chọn |
 | Sự kiện báo trùng nhiều lần | Đăng ký lắng nghe nhiều lần trong useEffect | Nhớ gọi .off() trong phần dọn dẹp |

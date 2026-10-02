@@ -1,0 +1,6 @@
+*
+!.gitignore
+!.keep
+!uploads/
+!uploads/.gitignore
+!uploads/.keep

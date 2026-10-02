@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { Store, ShoppingBag, AlertCircle, CheckCircle2, Ticket } from "lucide-react";
-import { getListings } from "../services/api.js";
-import { buyResaleTicket } from "../services/contract.js";
-import { useWallet } from "../hooks/useWallet.js";
+import { getListings } from "../../services/api.js";
+import { buyResaleTicket } from "../../services/contract.js";
+import { useWallet } from "../../hooks/useWallet.js";
+import { explainContractError } from "../../utils/contractErrors.js";
 
 export default function Marketplace() {
-  const { account, connect, wrongNetwork, ensureNetwork } = useWallet();
+  const { account, connect, ensureNetwork } = useWallet();
   const [listings, setListings] = useState([]);
   const [msg, setMsg] = useState(null);
   const [busy, setBusy] = useState(null);
@@ -24,13 +25,22 @@ export default function Marketplace() {
     setBusy(item.tokenId);
     try {
       if (!account) await connect();
-      if (wrongNetwork) await ensureNetwork();
-      const price = item.listingPrice ?? item.chainListing?.price;
-      const { hash } = await buyResaleTicket(item.tokenId, price);
+      await ensureNetwork();
+      const priceEth =
+        item.chainListing?.price ?? item.listingPrice ?? null;
+      const priceWei =
+        item.listingPriceWei ?? item.chainListing?.priceWei ?? null;
+      const { hash } = await buyResaleTicket(item.tokenId, priceEth, priceWei);
       setMsg(`Mua resale thành công. Tx: ${hash}`);
-      await load();
+      // Poll reload — listener may lag a moment
+      for (let i = 0; i < 5; i++) {
+        await new Promise((r) => setTimeout(r, 800));
+        await load();
+        const still = (await getListings())?.find((x) => x.tokenId === item.tokenId);
+        if (!still) break;
+      }
     } catch (e) {
-      setMsg(e.shortMessage || e.message || String(e));
+      setMsg(explainContractError(e));
     } finally {
       setBusy(null);
     }

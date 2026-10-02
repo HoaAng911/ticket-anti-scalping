@@ -87,6 +87,94 @@ export async function configureEventOnChain({ eventChainId, totalSupply, priceEt
   return { txHash: receipt.hash, eventChainId: Number(eventChainId), priceEth: String(priceEth) };
 }
 
+/**
+ * Đồng bộ mọi hạng vé trong Mongo lên contract (configureEvent nếu chưa active / lệch giá·supply).
+ * Dùng sau khi redeploy contract hoặc khi Mongo còn event cũ.
+ */
+export async function syncMongoEventsToChain() {
+  const { default: Event } = await import("../models/Event.js");
+  const ticket = getTicketContract();
+  const events = await Event.find().lean();
+  const results = [];
+
+  for (const ev of events) {
+    for (const t of ev.ticketTypes || []) {
+      const eventChainId = Number(t.eventChainId);
+      if (!Number.isFinite(eventChainId) || eventChainId < 1) continue;
+      if (!(Number(t.price) > 0) || !(Number(t.totalSupply) > 0) || !t.name) {
+        results.push({
+          eventId: ev._id.toString(),
+          eventTitle: ev.title,
+          eventChainId,
+          skipped: true,
+          reason: "tier thiếu name/price/totalSupply",
+        });
+        continue;
+      }
+
+      let cfg;
+      try {
+        cfg = await ticket.eventConfigs(eventChainId);
+      } catch (err) {
+        results.push({
+          eventId: ev._id.toString(),
+          eventChainId,
+          error: err.message,
+        });
+        continue;
+      }
+
+      const priceWei = ethers.parseEther(String(t.price));
+      const needSync =
+        !cfg.active ||
+        cfg.totalSupply === 0n ||
+        cfg.totalSupply !== BigInt(Number(t.totalSupply)) ||
+        cfg.priceWei !== priceWei;
+
+      if (!needSync) {
+        results.push({
+          eventId: ev._id.toString(),
+          eventTitle: ev.title,
+          eventChainId,
+          name: t.name,
+          synced: false,
+          alreadyActive: true,
+        });
+        continue;
+      }
+
+      try {
+        const chain = await configureEventOnChain({
+          eventChainId,
+          totalSupply: t.totalSupply,
+          priceEth: t.price,
+          name: t.name,
+        });
+        results.push({
+          eventId: ev._id.toString(),
+          eventTitle: ev.title,
+          eventChainId,
+          name: t.name,
+          synced: true,
+          txHash: chain.txHash,
+        });
+      } catch (err) {
+        results.push({
+          eventId: ev._id.toString(),
+          eventTitle: ev.title,
+          eventChainId,
+          name: t.name,
+          error: err.message,
+        });
+      }
+    }
+  }
+
+  const synced = results.filter((r) => r.synced).length;
+  const errors = results.filter((r) => r.error).length;
+  return { synced, errors, total: results.length, results };
+}
+
 export async function adminMintTickets(recipients, eventChainId) {
   const signer = await getAdminSigner();
   const ticket = getTicketContract().connect(signer);
@@ -108,7 +196,7 @@ export async function adminMintTickets(recipients, eventChainId) {
   const chainValid =
     tipAfter > 0 ? await ticket.verifyChain(1, tipAfter) : true;
 
-  // Mỗi vé mint = 1 TicketBlock node mới, prev → hash hiện tại
+  // Mỗi vé mint = 1 TicketBlock node mới, prev nối sang hash hiện tại
   const newBlocks = [];
   for (let i = tipBefore + 1; i <= tipAfter; i++) {
     const b = await ticket.getTicketBlockByIndex(i);

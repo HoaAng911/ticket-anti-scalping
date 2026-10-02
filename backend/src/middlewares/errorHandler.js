@@ -4,8 +4,15 @@ export function notFound(req, res, next) {
 
 export function errorHandler(err, req, res, next) {
   console.error(err);
-  const status = err.status || err.statusCode || 500;
-  const message = err.message || "Lỗi máy chủ";
+  let status = err.status || err.statusCode || 500;
+  let message = err.message || "Lỗi máy chủ";
+  if (err.code === "LIMIT_FILE_SIZE") {
+    status = 400;
+    message = "File quá lớn (tối đa 12MB)";
+  } else if (err.name === "MulterError" || err.code === "LIMIT_UNEXPECTED_FILE") {
+    status = 400;
+    message = err.message || "Lỗi upload file";
+  }
   res.status(status).json({ success: false, error: message });
 }
 

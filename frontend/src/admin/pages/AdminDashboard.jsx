@@ -24,10 +24,20 @@ import {
   Trash2,
   PanelLeftClose,
   PanelLeftOpen,
+  FileText,
+  Stamp,
+  Sun,
+  Moon,
+  Award,
 } from "lucide-react";
-import { useAuth } from "../context/AuthContext.jsx";
-import { useWallet } from "../hooks/useWallet.js";
+import { useAuth } from "../../context/AuthContext.jsx";
+import { useTheme } from "../../context/ThemeContext.jsx";
+import { useWallet } from "../../hooks/useWallet.js";
 import AdminUsersPanel from "../components/AdminUsersPanel.jsx";
+import AdminInvoicesPanel from "../components/AdminInvoicesPanel.jsx";
+import AdminLicensesPanel from "../components/AdminLicensesPanel.jsx";
+import AdminOrganizerProfilesPanel from "../components/AdminOrganizerProfilesPanel.jsx";
+import AdminModal, { AdminConfirmModal, AdminToast } from "../components/AdminModal.jsx";
 import {
   addTicketTypesToEvent,
   createAndFundWallets,
@@ -39,7 +49,8 @@ import {
   getLabWallets,
   getTicketChain,
   mintTicketsToWallets,
-} from "../services/api.js";
+  syncEventsToChain,
+} from "../../services/api.js";
 
 const defaultTiers = () => [
   { name: "Standard", price: "0.01", totalSupply: "100", eventChainId: "" },
@@ -67,22 +78,127 @@ function nextChainIdFromEvents(events) {
 }
 
 const MENU = [
-  { id: "overview", label: "Tổng quan", icon: LayoutDashboard },
-  { id: "users", label: "Người dùng & quyền", icon: UserCog },
-  { id: "chain", label: "Chuỗi block vé", icon: Blocks },
-  { id: "faucet", label: "Cấp ETH / Ví", icon: Droplets },
-  { id: "create", label: "Tạo sự kiện", icon: TicketPlus },
-  { id: "mint", label: "Mint vé", icon: Send },
-  { id: "events", label: "Sự kiện", icon: CalendarDays },
-  { id: "tickets", label: "Vé", icon: Ticket },
-  { id: "txs", label: "Giao dịch", icon: ArrowLeftRight },
+  {
+    id: "overview",
+    label: "Tổng quan",
+    icon: LayoutDashboard,
+    tone: "sky",
+    desc: "Thống kê nhanh và giao dịch gần đây trên sổ vé.",
+  },
+  {
+    id: "users",
+    label: "Người dùng & quyền",
+    icon: UserCog,
+    tone: "indigo",
+    desc: "Quản lý tài khoản, vai trò và phân quyền lab.",
+  },
+  {
+    id: "invoices",
+    label: "Hóa đơn",
+    icon: FileText,
+    tone: "teal",
+    desc: "Danh sách hóa đơn GTGT, xem / tải PDF, hủy chứng từ.",
+  },
+  {
+    id: "licenses",
+    label: "Giấy phép SK",
+    icon: Stamp,
+    tone: "violet",
+    desc: "Quản lý giấy phép hoạt động / tổ chức sự kiện.",
+  },
+  {
+    id: "organizer-profiles",
+    label: "Hồ sơ năng lực BTC",
+    icon: Award,
+    tone: "indigo",
+    desc: "Quản lý hồ sơ năng lực toàn bộ thành viên Ban tổ chức.",
+  },
+  {
+    id: "chain",
+    label: "Chuỗi block vé",
+    icon: Blocks,
+    tone: "emerald",
+    desc: "TicketBlock on-chain — liên kết hash giữa các vé đã mint.",
+  },
+  {
+    id: "faucet",
+    label: "Cấp ETH / Ví",
+    icon: Droplets,
+    tone: "amber",
+    desc: "Tạo ví lab và nạp ETH từ quỹ deployer (faucet).",
+  },
+  {
+    id: "create",
+    label: "Tạo sự kiện",
+    icon: TicketPlus,
+    tone: "rose",
+    desc: "Tạo sự kiện Mongo + hạng vé on-chain (eventChainId).",
+  },
+  {
+    id: "mint",
+    label: "Mint vé",
+    icon: Send,
+    tone: "violet",
+    desc: "Mint NFT vé tới danh sách ví (admin / demo).",
+  },
+  {
+    id: "events",
+    label: "Sự kiện",
+    icon: CalendarDays,
+    tone: "cyan",
+    desc: "Danh sách sự kiện, đồng bộ chain, thêm hạng vé.",
+  },
+  {
+    id: "tickets",
+    label: "Vé",
+    icon: Ticket,
+    tone: "orange",
+    desc: "Toàn bộ vé NFT đã ghi trên ledger Mongo.",
+  },
+  {
+    id: "txs",
+    label: "Giao dịch",
+    icon: ArrowLeftRight,
+    tone: "slate",
+    desc: "Lịch sử mint / resale đã đồng bộ từ listener.",
+  },
 ];
 
 const TITLES = Object.fromEntries(MENU.map((m) => [m.id, m.label]));
+const MENU_BY_ID = Object.fromEntries(MENU.map((m) => [m.id, m]));
+
+function AdminThemeSwitch() {
+  const { theme, setTheme } = useTheme();
+  return (
+    <div className="lte-theme-switch" role="group" aria-label="Chế độ giao diện">
+      <button
+        type="button"
+        className={theme === "light" ? "active" : undefined}
+        onClick={() => setTheme("light")}
+        title="Ban ngày"
+        aria-pressed={theme === "light"}
+      >
+        <Sun size={14} />
+        <span className="lte-theme-label">Ngày</span>
+      </button>
+      <button
+        type="button"
+        className={theme === "dark" ? "active" : undefined}
+        onClick={() => setTheme("dark")}
+        title="Ban đêm"
+        aria-pressed={theme === "dark"}
+      >
+        <Moon size={14} />
+        <span className="lte-theme-label">Đêm</span>
+      </button>
+    </div>
+  );
+}
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const { user, isAdmin, login, logout, loading, bindWallet } = useAuth();
+  const { theme } = useTheme();
   const { account, connect } = useWallet();
   const [email, setEmail] = useState("admin@ticket.local");
   const [password, setPassword] = useState("admin123");
@@ -110,6 +226,7 @@ export default function AdminDashboard() {
   const [extraTiers, setExtraTiers] = useState([
     { name: "", price: "0.02", totalSupply: "50", eventChainId: "" },
   ]);
+  const [confirmDialog, setConfirmDialog] = useState(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try {
       return localStorage.getItem("lte-sidebar-collapsed") === "1";
@@ -265,6 +382,32 @@ export default function AdminDashboard() {
     }
   }
 
+  async function onSyncEventsToChain() {
+    setConfirmDialog({
+      title: "Đồng bộ sự kiện lên chain?",
+      message:
+        "Hệ thống sẽ gọi configureEvent cho mọi hạng vé Mongo chưa có trên contract. Tiếp tục?",
+      confirmLabel: "Đồng bộ",
+      icon: Blocks,
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        setBusy(true);
+        setMsg(null);
+        try {
+          const data = await syncEventsToChain();
+          setMsg(
+            `Đồng bộ Mongo sang chain xong: synced=${data.synced}, errors=${data.errors}, total=${data.total}`
+          );
+          await loadAdmin();
+        } catch (err) {
+          setMsg(err.response?.data?.error || err.shortMessage || err.message);
+        } finally {
+          setBusy(false);
+        }
+      },
+    });
+  }
+
   async function onFundExisting(e) {
     e.preventDefault();
     setBusy(true);
@@ -312,7 +455,7 @@ export default function AdminDashboard() {
       const data = await mintTicketsToWallets(Number(mintChainId), mintList);
       const chain = data.chain;
       const linkMsg = chain?.newBlocks?.length
-        ? ` · TicketBlock tip ${chain.tipBefore}→${chain.tipAfter}` +
+        ? ` · TicketBlock tip ${chain.tipBefore} sang ${chain.tipAfter}` +
           ` · verify=${chain.verifyChain ? "OK" : "LỖI"}` +
           ` · nodes: ${chain.newBlocks
             .map(
@@ -353,7 +496,7 @@ export default function AdminDashboard() {
 
   if (loading) {
     return (
-      <div className="lte-login-wrap">
+      <div className="lte-login-wrap" data-theme={theme}>
         <div className="lte-login-card">
           <header>
             <h1>
@@ -364,6 +507,9 @@ export default function AdminDashboard() {
           </header>
           <div className="lte-login-body">
             <p className="lte-help">Vui lòng chờ trong giây lát.</p>
+            <div className="lte-login-theme">
+              <AdminThemeSwitch />
+            </div>
           </div>
         </div>
       </div>
@@ -372,7 +518,7 @@ export default function AdminDashboard() {
 
   if (user && !isAdmin) {
     return (
-      <div className="lte-login-wrap">
+      <div className="lte-login-wrap" data-theme={theme}>
         <div className="lte-login-card">
           <header>
             <h1>
@@ -399,6 +545,9 @@ export default function AdminDashboard() {
             <button type="button" className="lte-btn lte-btn-default" onClick={() => navigate("/user")}>
               Về trang người dùng
             </button>
+            <div className="lte-login-theme">
+              <AdminThemeSwitch />
+            </div>
           </div>
         </div>
       </div>
@@ -407,7 +556,7 @@ export default function AdminDashboard() {
 
   if (!user) {
     return (
-      <div className="lte-login-wrap">
+      <div className="lte-login-wrap" data-theme={theme}>
         <div className="lte-login-card">
           <header>
             <h1>
@@ -441,6 +590,9 @@ export default function AdminDashboard() {
             <button type="submit" className="lte-btn lte-btn-primary">
               Đăng nhập
             </button>
+            <div className="lte-login-theme">
+              <AdminThemeSwitch />
+            </div>
             <p className="lte-help">
               Seed: admin@ticket.local / admin123 · organizer@ticket.local / organizer123 ·{" "}
               <Link to="/user">Trang người dùng</Link>
@@ -453,9 +605,14 @@ export default function AdminDashboard() {
 
   const stats = dash?.stats || {};
   const funder = dash?.funder || {};
+  const activeMenu = MENU_BY_ID[tab] || MENU[0];
+  const ActiveIcon = activeMenu.icon;
 
   return (
-    <div className={`lte-root${sidebarCollapsed ? " sidebar-collapsed" : ""}`}>
+    <div
+      className={`lte-root${sidebarCollapsed ? " sidebar-collapsed" : ""}`}
+      data-theme={theme}
+    >
       <aside className="lte-sidebar" aria-label="Menu quản trị">
         <div className="lte-brand-row">
           <Link to="/admin" className="lte-brand" title="TicketAdmin">
@@ -525,10 +682,27 @@ export default function AdminDashboard() {
             <h1>{TITLES[tab] || "Dashboard"}</h1>
           </div>
           <div className="lte-top-actions">
+            <AdminThemeSwitch />
             <button type="button" className="lte-btn lte-btn-default" onClick={onLinkWallet}>
               <Wallet size={15} /> Liên kết ví
             </button>
-            <button type="button" className="lte-btn lte-btn-default" onClick={logout}>
+            <button
+              type="button"
+              className="lte-btn lte-btn-default"
+              onClick={() =>
+                setConfirmDialog({
+                  title: "Đăng xuất?",
+                  message: "Bạn sẽ cần đăng nhập lại để vào Admin.",
+                  confirmLabel: "Đăng xuất",
+                  tone: "danger",
+                  icon: LogOut,
+                  onConfirm: () => {
+                    setConfirmDialog(null);
+                    logout();
+                  },
+                })
+              }
+            >
               <LogOut size={15} /> Đăng xuất
             </button>
           </div>
@@ -536,13 +710,16 @@ export default function AdminDashboard() {
 
         <div className="lte-content">
           <div className="lte-breadcrumb">
-            Home / Admin / {TITLES[tab]}
+            <span>Home</span>
+            <span className="lte-bc-sep">/</span>
+            <span>Admin</span>
+            <span className="lte-bc-sep">/</span>
+            <strong>{TITLES[tab]}</strong>
             {funder.address && (
-              <>
-                {" "}
+              <span className="lte-bc-meta">
                 · quỹ{" "}
                 <strong>{Number(funder.balanceEth || 0).toLocaleString("vi-VN")}</strong> ETH
-              </>
+              </span>
             )}
           </div>
 
@@ -554,64 +731,92 @@ export default function AdminDashboard() {
           )}
           {funder.error && <div className="lte-alert err">Funder: {funder.error}</div>}
 
-          <div className="lte-info-boxes">
-            <div className="lte-info-box">
-              <div className="icon bg-aqua">
-                <CalendarDays size={36} />
-              </div>
-              <div className="content">
-                <span>Sự kiện</span>
-                <strong>{stats.events ?? "—"}</strong>
-              </div>
-            </div>
-            <div className="lte-info-box">
-              <div className="icon bg-green">
-                <Ticket size={36} />
-              </div>
-              <div className="content">
-                <span>Vé mint</span>
-                <strong>{stats.tickets ?? "—"}</strong>
-              </div>
-            </div>
-            <div className="lte-info-box">
-              <div className="icon bg-yellow">
-                <Store size={36} />
-              </div>
-              <div className="content">
-                <span>Listing</span>
-                <strong>{stats.listed ?? "—"}</strong>
-              </div>
-            </div>
-            <div className="lte-info-box">
-              <div className="icon bg-red">
-                <Activity size={36} />
-              </div>
-              <div className="content">
-                <span>Giao dịch</span>
-                <strong>{stats.transactions ?? "—"}</strong>
-              </div>
-            </div>
-            <div className="lte-info-box">
-              <div className="icon bg-blue">
-                <Users size={36} />
-              </div>
-              <div className="content">
-                <span>Ví lab</span>
-                <strong>{stats.labWallets ?? "—"}</strong>
-              </div>
-            </div>
-          </div>
-
-          {tab === "users" && <AdminUsersPanel onMessage={setMsg} />}
-
           {tab === "overview" && (
+            <div className="lte-info-boxes">
+              <div className="lte-info-box">
+                <div className="icon bg-aqua">
+                  <CalendarDays size={36} />
+                </div>
+                <div className="content">
+                  <span>Sự kiện</span>
+                  <strong>{stats.events ?? "—"}</strong>
+                </div>
+              </div>
+              <div className="lte-info-box">
+                <div className="icon bg-green">
+                  <Ticket size={36} />
+                </div>
+                <div className="content">
+                  <span>Vé mint</span>
+                  <strong>{stats.tickets ?? "—"}</strong>
+                </div>
+              </div>
+              <div className="lte-info-box">
+                <div className="icon bg-yellow">
+                  <Store size={36} />
+                </div>
+                <div className="content">
+                  <span>Listing</span>
+                  <strong>{stats.listed ?? "—"}</strong>
+                </div>
+              </div>
+              <div className="lte-info-box">
+                <div className="icon bg-red">
+                  <Activity size={36} />
+                </div>
+                <div className="content">
+                  <span>Giao dịch</span>
+                  <strong>{stats.transactions ?? "—"}</strong>
+                </div>
+              </div>
+              <div className="lte-info-box">
+                <div className="icon bg-blue">
+                  <Users size={36} />
+                </div>
+                <div className="content">
+                  <span>Ví lab</span>
+                  <strong>{stats.labWallets ?? "—"}</strong>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <section
+            key={tab}
+            className={`lte-workspace tone-${activeMenu.tone || "sky"}`}
+            aria-labelledby="lte-workspace-title"
+          >
+            <header className="lte-workspace-head">
+              <div className="lte-workspace-icon" aria-hidden>
+                <ActiveIcon size={26} strokeWidth={2.2} />
+              </div>
+              <div className="lte-workspace-copy">
+                <h2 id="lte-workspace-title">{activeMenu.label}</h2>
+                <p>{activeMenu.desc}</p>
+              </div>
+              <div className="lte-workspace-tools">
+                <span className="lte-pill">{MENU.findIndex((m) => m.id === tab) + 1}/{MENU.length}</span>
+              </div>
+            </header>
+            <div className="lte-workspace-body">
+              {tab === "users" && <AdminUsersPanel onMessage={setMsg} />}
+
+              {tab === "invoices" && <AdminInvoicesPanel onMessage={setMsg} />}
+
+              {tab === "licenses" && <AdminLicensesPanel onMessage={setMsg} />}
+
+              {tab === "organizer-profiles" && (
+                <AdminOrganizerProfilesPanel onMessage={setMsg} />
+              )}
+
+              {tab === "overview" && (
             <div className="lte-box">
               <div className="lte-box-header">
                 <h3>
                   <Activity size={18} style={{ verticalAlign: -3 }} /> Giao dịch gần đây
                 </h3>
               </div>
-              <div className="lte-box-body" style={{ padding: 0 }}>
+              <div className="lte-box-body lte-box-body-flush">
                 <table className="lte-table">
                   <thead>
                     <tr>
@@ -680,7 +885,7 @@ export default function AdminDashboard() {
                   <tbody>
                     {(chain?.blocks || []).map((b) => (
                       <tr key={b.tokenId}>
-                        <td>{b.blockIndex}</td>
+                        <td>{b.blockIndex ?? b.index}</td>
                         <td>#{b.tokenId}</td>
                         <td className="mono">
                           {!b.prevBlockHash ||
@@ -690,7 +895,7 @@ export default function AdminDashboard() {
                             : `${b.prevBlockHash.slice(0, 12)}…`}
                         </td>
                         <td className="mono">{b.blockHash?.slice(0, 14)}…</td>
-                        <td className="mono">{b.ownerWallet?.slice(0, 10)}…</td>
+                        <td className="mono">{(b.ownerWallet || b.owner)?.slice(0, 10)}…</td>
                       </tr>
                     ))}
                     {!chain?.blocks?.length && (
@@ -766,7 +971,7 @@ export default function AdminDashboard() {
                   <div className="lte-box-header">
                     <h3>Batch vừa tạo (lab — copy private key)</h3>
                   </div>
-                  <div className="lte-box-body" style={{ padding: 0 }}>
+                  <div className="lte-box-body lte-box-body-flush">
                     <table className="lte-table">
                       <thead>
                         <tr>
@@ -793,7 +998,7 @@ export default function AdminDashboard() {
                 <div className="lte-box-header">
                   <h3>Ví lab đã lưu ({labWallets.length})</h3>
                 </div>
-                <div className="lte-box-body" style={{ padding: 0 }}>
+                <div className="lte-box-body lte-box-body-flush">
                   <table className="lte-table">
                     <thead>
                       <tr>
@@ -1002,9 +1207,20 @@ export default function AdminDashboard() {
             <div className="lte-box">
               <div className="lte-box-header">
                 <h3>Danh sách sự kiện</h3>
-                <button type="button" className="lte-btn lte-btn-success" onClick={() => setTab("create")}>
-                  <Plus size={14} /> Sự kiện mới
-                </button>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    className="lte-btn"
+                    disabled={busy}
+                    onClick={onSyncEventsToChain}
+                    title="configureEvent mọi hạng vé Mongo chưa có trên contract"
+                  >
+                    <Blocks size={14} /> Đồng bộ lên chain
+                  </button>
+                  <button type="button" className="lte-btn lte-btn-success" onClick={() => setTab("create")}>
+                    <Plus size={14} /> Sự kiện mới
+                  </button>
+                </div>
               </div>
               <div className="lte-box-body">
                 {(dash?.events || []).map((ev) => (
@@ -1029,9 +1245,12 @@ export default function AdminDashboard() {
                         <button
                           type="button"
                           className="lte-btn lte-btn-default"
-                          onClick={() =>
-                            setAddTierEventId(addTierEventId === ev._id ? null : ev._id)
-                          }
+                          onClick={() => {
+                            setAddTierEventId(ev._id);
+                            setExtraTiers([
+                              { name: "", price: "0.02", totalSupply: "50", eventChainId: "" },
+                            ]);
+                          }}
                         >
                           <Plus size={14} /> Thêm hạng
                         </button>
@@ -1040,92 +1259,6 @@ export default function AdminDashboard() {
                         </Link>
                       </div>
                     </div>
-
-                    {addTierEventId === ev._id && (
-                      <div className="lte-tier-list" style={{ marginTop: "0.75rem" }}>
-                        {extraTiers.map((tier, index) => (
-                          <div key={index} className="lte-tier-row">
-                            <div className="lte-form-grid">
-                              <label>
-                                Tên hạng mới
-                                <input
-                                  value={tier.name}
-                                  onChange={(e) => {
-                                    const v = e.target.value;
-                                    setExtraTiers((rows) =>
-                                      rows.map((r, i) => (i === index ? { ...r, name: v } : r))
-                                    );
-                                  }}
-                                />
-                              </label>
-                              <label>
-                                Giá (ETH)
-                                <input
-                                  value={tier.price}
-                                  onChange={(e) => {
-                                    const v = e.target.value;
-                                    setExtraTiers((rows) =>
-                                      rows.map((r, i) => (i === index ? { ...r, price: v } : r))
-                                    );
-                                  }}
-                                />
-                              </label>
-                              <label>
-                                Supply
-                                <input
-                                  value={tier.totalSupply}
-                                  onChange={(e) => {
-                                    const v = e.target.value;
-                                    setExtraTiers((rows) =>
-                                      rows.map((r, i) =>
-                                        i === index ? { ...r, totalSupply: v } : r
-                                      )
-                                    );
-                                  }}
-                                />
-                              </label>
-                              <label>
-                                ChainId (tuỳ chọn)
-                                <input
-                                  placeholder="tự gán"
-                                  value={tier.eventChainId}
-                                  onChange={(e) => {
-                                    const v = e.target.value;
-                                    setExtraTiers((rows) =>
-                                      rows.map((r, i) =>
-                                        i === index ? { ...r, eventChainId: v } : r
-                                      )
-                                    );
-                                  }}
-                                />
-                              </label>
-                            </div>
-                          </div>
-                        ))}
-                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                          <button
-                            type="button"
-                            className="lte-btn lte-btn-default"
-                            onClick={() =>
-                              setExtraTiers((rows) => [
-                                ...rows,
-                                { name: "", price: "0.03", totalSupply: "30", eventChainId: "" },
-                              ])
-                            }
-                          >
-                            <Plus size={14} /> Thêm dòng
-                          </button>
-                          <button
-                            type="button"
-                            className="lte-btn lte-btn-success"
-                            disabled={busy}
-                            onClick={() => onAddTiersToEvent(ev._id)}
-                          >
-                            <TicketPlus size={14} /> {busy ? "Đang lưu…" : "Lưu hạng mới on-chain"}
-                          </button>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 ))}
                 {!dash?.events?.length && <p className="lte-help">Chưa có sự kiện.</p>}
@@ -1138,13 +1271,13 @@ export default function AdminDashboard() {
               <div className="lte-box-header">
                 <h3>Toàn bộ vé (cache)</h3>
               </div>
-              <div className="lte-box-body" style={{ padding: 0 }}>
+              <div className="lte-box-body lte-box-body-flush">
                 <table className="lte-table">
                   <thead>
                     <tr>
                       <th>Token</th>
                       <th>Block#</th>
-                      <th>Prev→Hash</th>
+                      <th>Prev sang Hash</th>
                       <th>Sự kiện</th>
                       <th>Chủ ví</th>
                       <th>Trạng thái</th>
@@ -1157,7 +1290,7 @@ export default function AdminDashboard() {
                         <td>{t.blockIndex ?? "—"}</td>
                         <td className="mono">
                           {t.blockHash
-                            ? `${(t.prevBlockHash || "0x0").slice(0, 8)}…→${t.blockHash.slice(0, 8)}…`
+                            ? `${(t.prevBlockHash || "0x0").slice(0, 8)}… sang ${t.blockHash.slice(0, 8)}…`
                             : "—"}
                         </td>
                         <td>{t.event?.title || t.eventChainId}</td>
@@ -1178,7 +1311,7 @@ export default function AdminDashboard() {
               <div className="lte-box-header">
                 <h3>Lịch sử giao dịch</h3>
               </div>
-              <div className="lte-box-body" style={{ padding: 0 }}>
+              <div className="lte-box-body lte-box-body-flush">
                 <table className="lte-table">
                   <thead>
                     <tr>
@@ -1210,8 +1343,130 @@ export default function AdminDashboard() {
               </div>
             </div>
           )}
+            </div>
+          </section>
         </div>
       </div>
+
+      <AdminModal
+        open={Boolean(addTierEventId)}
+        onClose={() => !busy && setAddTierEventId(null)}
+        title="Thêm hạng vé"
+        subtitle={
+          (dash?.events || []).find((e) => e._id === addTierEventId)?.title || "Sự kiện"
+        }
+        icon={TicketPlus}
+        size="lg"
+        footer={
+          <>
+            <button
+              type="button"
+              className="lte-btn lte-btn-default"
+              disabled={busy}
+              onClick={() => setAddTierEventId(null)}
+            >
+              Hủy
+            </button>
+            <button
+              type="button"
+              className="lte-btn lte-btn-default"
+              disabled={busy}
+              onClick={() =>
+                setExtraTiers((rows) => [
+                  ...rows,
+                  { name: "", price: "0.03", totalSupply: "30", eventChainId: "" },
+                ])
+              }
+            >
+              <Plus size={14} /> Thêm dòng
+            </button>
+            <button
+              type="button"
+              className="lte-btn lte-btn-success"
+              disabled={busy}
+              onClick={() => onAddTiersToEvent(addTierEventId)}
+            >
+              <TicketPlus size={14} /> {busy ? "Đang lưu…" : "Lưu hạng mới on-chain"}
+            </button>
+          </>
+        }
+      >
+        <div className="lte-tier-list">
+          {extraTiers.map((tier, index) => (
+            <div key={index} className="lte-tier-row">
+              <div className="lte-form-grid">
+                <label>
+                  Tên hạng mới
+                  <input
+                    value={tier.name}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setExtraTiers((rows) =>
+                        rows.map((r, i) => (i === index ? { ...r, name: v } : r))
+                      );
+                    }}
+                  />
+                </label>
+                <label>
+                  Giá (ETH)
+                  <input
+                    value={tier.price}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setExtraTiers((rows) =>
+                        rows.map((r, i) => (i === index ? { ...r, price: v } : r))
+                      );
+                    }}
+                  />
+                </label>
+                <label>
+                  Supply
+                  <input
+                    value={tier.totalSupply}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setExtraTiers((rows) =>
+                        rows.map((r, i) => (i === index ? { ...r, totalSupply: v } : r))
+                      );
+                    }}
+                  />
+                </label>
+                <label>
+                  ChainId (tuỳ chọn)
+                  <input
+                    placeholder="tự gán"
+                    value={tier.eventChainId}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setExtraTiers((rows) =>
+                        rows.map((r, i) => (i === index ? { ...r, eventChainId: v } : r))
+                      );
+                    }}
+                  />
+                </label>
+              </div>
+            </div>
+          ))}
+        </div>
+      </AdminModal>
+
+      <AdminConfirmModal
+        open={Boolean(confirmDialog)}
+        onClose={() => setConfirmDialog(null)}
+        onConfirm={confirmDialog?.onConfirm}
+        title={confirmDialog?.title}
+        message={confirmDialog?.message}
+        confirmLabel={confirmDialog?.confirmLabel}
+        tone={confirmDialog?.tone}
+        icon={confirmDialog?.icon}
+        busy={busy}
+      />
+
+      <AdminToast
+        message={msg}
+        tone={msgOk ? "ok" : "err"}
+        onDismiss={() => setMsg(null)}
+      />
     </div>
   );
 }

@@ -1,253 +1,268 @@
 # Ticket Anti-Scalping
 
-**Hệ thống bán vé sự kiện bằng NFT trên Ethereum — chống chợ đen (scalping) bằng ràng buộc on-chain.**
+Đồ án bán vé sự kiện bằng **NFT (ERC-721)** trên mạng Ethereum lab (geth Clique), kèm marketplace chống scalping.
 
-Đồ án tốt nghiệp / monorepo lab: mạng geth Clique riêng, smart contract ERC-721 + marketplace, backend Express/MongoDB đồng bộ sự kiện blockchain, frontend React + MetaMask.
+| Lớp | Công nghệ |
+|-----|-----------|
+| Blockchain | geth 1.13.x · Clique PoA · `chainId = 12345` |
+| Smart contract | Solidity · Hardhat · OpenZeppelin 5.0.2 |
+| Backend | Node.js · Express · MongoDB · ethers.js · JWT |
+| Frontend | React · Vite · MetaMask |
+
+**Nguyên tắc:** trạng thái vé thật nằm **trên contract**. Mongo chỉ dùng cho auth, metadata sự kiện và cache.
+
+Tài liệu sâu hơn: [`HUONG-DAN-HE-THONG.md`](./HUONG-DAN-HE-THONG.md) · [`HUONG-DAN-CAI-DAT.md`](./HUONG-DAN-CAI-DAT.md) · [`blockchain/private-net/HUONG-DAN.md`](./blockchain/private-net/HUONG-DAN.md)
 
 ---
 
 ## Mục lục
 
-1. [Giới thiệu dự án](#1-giới-thiệu-dự-án)
-2. [Kiến trúc tổng thể](#2-kiến-trúc-tổng-thể)
-3. [Cơ chế chống scalping](#3-cơ-chế-chống-scalping)
-4. [Cấu trúc thư mục](#4-cấu-trúc-thư-mục)
-5. [Yêu cầu môi trường](#5-yêu-cầu-môi-trường)
-6. [Cài đặt và chạy (chi tiết)](#6-cài-đặt-và-chạy-chi-tiết)
-7. [Cấu hình MetaMask](#7-cấu-hình-metamask)
-8. [Luồng hoạt động chi tiết](#8-luồng-hoạt-động-chi-tiết)
-9. [Giải thích từng thành phần](#9-giải-thích-từng-thành-phần)
-10. [Tài khoản & cổng lab](#10-tài-khoản--cổng-lab)
-11. [Smoke test end-to-end](#11-smoke-test-end-to-end)
-12. [Xử lý lỗi thường gặp](#12-xử-lý-lỗi-thường-gặp)
-13. [Tài liệu liên quan](#13-tài-liệu-liên-quan)
+1. [Yêu cầu môi trường](#1-yêu-cầu-môi-trường)
+2. [Cài đặt phụ thuộc theo hệ điều hành](#2-cài-đặt-phụ-thuộc-theo-hệ-điều-hành)
+3. [Thứ tự cài đặt dự án (bắt buộc)](#3-thứ-tự-cài-đặt-dự-án-bắt-buộc)
+4. [File `.env` — cách lấy và điền thông số](#4-file-env--cách-lấy-và-điền-thông-số)
+5. [MetaMask](#5-metamask)
+6. [Tài khoản lab](#6-tài-khoản-lab)
+7. [Khởi động hàng ngày](#7-khởi-động-hàng-ngày)
+8. [Smoke test](#8-smoke-test)
+9. [Xử lý lỗi thường gặp](#9-xử-lý-lỗi-thường-gặp)
 
 ---
 
-## 1. Giới thiệu dự án
+## 1. Yêu cầu môi trường
 
-### Bài toán
-
-Thị trường vé truyền thống dễ bị **scalping**: bot mua số lượng lớn lúc mở bán, rồi bán lại với giá cắt cổ. Người dùng thật khó mua được vé đúng giá; ban tổ chức mất kiểm soát kênh phụ.
-
-### Giải pháp
-
-Dự án mã hóa mỗi vé thành **NFT (ERC-721)** trên Ethereum (mạng lab geth hoặc Sepolia) và đưa các quy tắc chống scalping **trực tiếp vào smart contract**, không chỉ dựa vào backend:
-
-| Quy tắc | Mô tả |
-|--------|--------|
-| Giới hạn sở hữu | Tối đa **2 vé / ví / loại sự kiện** (`eventChainId`) |
-| Trần giá resale | Giá bán lại ≤ **110%** giá gốc khi mint |
-| Khóa chuyển nhượng | Không list/resale trước khi hết thời gian khóa (**60 giây** trên local, **24 giờ** trên Sepolia) |
-| Royalty | **5%** mỗi giao dịch resale về `organizerTreasury` |
-| Chuỗi TicketBlock | Mỗi mint tạo một “block” hash nối với block trước — lịch sử mint có thể xác minh on-chain |
-
-### Vai trò người dùng
-
-
-| Vai trò | Khả năng chính |
-|---------|----------------|
-| **User** | Đăng ký/đăng nhập, liên kết ví, mua vé sơ cấp, xem vé, đăng bán / mua lại trên marketplace |
-| **Organizer** | Quản lý sự kiện, xem dashboard, faucet ETH lab, mint hàng loạt (admin API) |
-| **Admin** | Toàn quyền organizer + quản lý người dùng / phân quyền |
-
-### Stack công nghệ
-
-
-| Lớp | Công nghệ |
-|-----|-----------|
-| Blockchain | geth 1.13.x, Clique PoA, `chainId = 12345` |
-| Smart contract | Solidity 0.8.28, Hardhat, OpenZeppelin 5.0.2, `evmVersion: paris` |
-| Backend | Node.js, Express, MongoDB, ethers.js, JWT, bcrypt |
-| Frontend | React, Vite, MetaMask (`window.ethereum`) |
-| Đồng bộ | Backend listener bắt event contract → cập nhật MongoDB (cache) |
-
-**Nguyên tắc thiết kế quan trọng:** nguồn chân lý của vé nằm **trên contract**. MongoDB chỉ là cache / chỉ mục để UI và báo cáo nhanh; client **không** được tự đổi `tokenId`, giá gốc hay trạng thái on-chain qua API.
-
----
-
-## 2. Kiến trúc tổng thể
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  Frontend (React + Vite)  ·  http://localhost:5173              │
-│  · Auth JWT  ·  MetaMask ký tx  ·  Proxy /api → backend         │
-└───────────────┬─────────────────────────────┬───────────────────┘
-                │ HTTP /api                   │ eth_sendTransaction
-                ▼                             ▼
-┌───────────────────────────┐    ┌────────────────────────────────┐
-│  Backend (Express :5001)  │    │  geth private-net              │
-│  · JWT / CRUD / Admin     │◄───│  Node1 RPC :8545 (chainId 12345)│
-│  · blockchainListener     │    │  Node2 RPC :8546               │
-│  · admin signer / faucet  │    │  EventTicket + Marketplace      │
-└─────────────┬─────────────┘    └────────────────────────────────┘
-              │
-              ▼
-       MongoDB :27017
-       (users, events, tickets cache, transactions)
-```
-
-Thứ tự khởi động **bắt buộc**:
-
-1. **geth private-net** (RPC sống)  
-2. **Deploy smart contract** (lần đầu hoặc sau khi reset chain)  
-3. **MongoDB + Backend** (listener + API)  
-4. **Frontend + MetaMask**
-
----
-
-## 3. Cơ chế chống scalping
-
-### On-chain (`EventTicket` + `Marketplace`)
-
-1. **`MAX_TICKETS_PER_WALLET = 2`**  
-   Mỗi địa chỉ chỉ mint tối đa 2 NFT cho cùng một `eventChainId`. Chặn bot gom vé bằng một ví.
-
-2. **Trần resale 110%**  
-   `maxAllowed = originalPrice * 110 / 100`. `listTicket` / mua lại bị revert nếu vượt trần.
-
-3. **Transfer lock**  
-   `unlockTime = mintedAt + transferLockSeconds`. Trước thời điểm này không được list. Local dùng khóa ngắn (60s) để demo; Sepolia dùng 24h sát thực tế.
-
-4. **Royalty 5%**  
-   Khi `buyResaleTicket`, một phần ETH chuyển về treasury organizer; phần còn lại cho seller.
-
-5. **TicketBlock (chuỗi hash)**  
-   Mỗi mint tạo `TicketBlock` với  
-   `blockHash = keccak256(index, tokenId, eventChainId, owner, price, mintedAt, prevBlockHash)`.  
-   Backend/UI có thể gọi API chuỗi block để kiểm tra toàn vẹn lịch sử mint.
-
-### Off-chain (hỗ trợ)
-
-- Rate limit API lúc mở bán  
-- Phân quyền admin/organizer  
-- Dashboard theo dõi mint / resale / royalty  
-- Faucet lab cấp ETH cho ví test (không thay thế quy tắc on-chain)
-
----
-
-## 4. Cấu trúc thư mục
-
-```
-ticket-anti-scalping/
-├── README.md                      # Tài liệu này
-├── HUONG-DAN-CAI-DAT.md           # Checklist cài đặt bổ sung
-├── luong-du-an.md                 # Tóm tắt luồng nghiệp vụ
-├── thiet-ke-du-an.md              # Schema DB, API, thiết kế chi tiết
-├── phan-cong-3-nguoi.md           # Phân công nhóm
-│
-├── blockchain/
-│   └── private-net/               # geth Clique 2 node, genesis, scripts
-│       ├── genesis.json
-│       ├── accounts.json
-│       ├── scripts/               # init, start-all, status, stop, …
-│       ├── metamask/              # Helper thêm mạng vào MetaMask
-│       └── HUONG-DAN.md
-│
-├── smart-contract/
-│   ├── contracts/
-│   │   ├── EventTicket.sol        # NFT vé + TicketBlock
-│   │   └── Marketplace.sol        # Resale chống scalping
-│   ├── scripts/deploy.js
-│   ├── test/
-│   ├── hardhat.config.js
-│   └── deployments/localhost.json # Địa chỉ sau deploy
-│
-├── backend/
-│   └── src/
-│       ├── server.js
-│       ├── models/                # User, Event, Ticket, Transaction, LabWallet
-│       ├── controllers/ · routes/ · middlewares/
-│       ├── services/              # blockchainService, listener, adminChain
-│       ├── scripts/seed.js
-│       └── abi/                   # ABI đồng bộ từ Hardhat
-│
-└── frontend/
-    └── src/
-        ├── pages/                 # Home, EventDetail, MyTickets, Marketplace, Admin, UserPortal
-        ├── context/               # AuthContext, WalletContext
-        ├── services/              # api.js, contract.js, abi/
-        └── components/
-```
-
----
-
-## 5. Yêu cầu môi trường
-
-
-| Công cụ | Phiên bản gợi ý | Mục đích |
-|---------|-----------------|----------|
-| Node.js | ≥ 18 | Backend, frontend, Hardhat |
-| npm | ≥ 9 | Cài dependency |
-| geth | **1.13.x** (đã kiểm với 1.13.15) | Private-net Clique |
-| MongoDB | 7.x | Cache & tài khoản |
-| Docker (tuỳ chọn) | — | Chạy Mongo nhanh |
-| MetaMask | Extension trình duyệt | Ký giao dịch |
-| curl / bash | Có sẵn macOS/Linux | Script kiểm tra |
-
+| Công cụ | Phiên bản | Mục đích |
+|---------|-----------|----------|
+| Node.js | ≥ 18 | backend, frontend, Hardhat |
+| npm | ≥ 9 | cài dependency |
+| geth | **1.13.x** | private-net (đã kiểm với 1.13.15) |
+| MongoDB | 7.x | user, event, cache vé |
+| Docker (tuỳ chọn) | — | chạy Mongo nhanh |
+| Git | — | clone repo |
+| bash / Git Bash / WSL | — | chạy script `blockchain/private-net/scripts/*.sh` |
+| curl, python3 | — | script status / kiểm tra RPC |
+| MetaMask | extension Chrome/Firefox/Edge | ký giao dịch |
 
 ### Cổng cần trống
 
-
 | Cổng | Dịch vụ |
 |------|---------|
-| 8545 / 8546 | geth HTTP RPC (node1 / node2) |
-| 8551 / 8552 | geth Auth RPC |
-| 30303 / 30304 | geth P2P |
-| 27017 | MongoDB |
-| **5001** | Backend API (tránh 5000 — AirPlay trên macOS) |
-| 5173 | Frontend Vite |
-
-
-### Cài nhanh trên macOS
-
-```bash
-brew install node ethereum
-node -v && npm -v && geth version
-```
-
-Nếu geth ≥ 1.14, một số flag mining/API có thể khác — ưu tiên giữ **1.13.x** cho lab đồ án.
-
----
-
-## 6. Cài đặt và chạy (chi tiết)
-
-Giả định thư mục gốc dự án:
+| `8545` / `8546` | geth HTTP RPC (node1 / node2) |
+| `8551` / `8552` | geth Auth RPC |
+| `30303` / `30304` | geth P2P |
+| `27017` | MongoDB |
+| `5001` | Backend API (tránh `5000` vì AirPlay trên macOS) |
+| `5173` | Frontend Vite |
 
 ```bash
 cd /đường/dẫn/ticket-anti-scalping
 ```
 
-### 6.1. Bước 1 — Khởi động geth private-net
+---
+
+## 2. Cài đặt phụ thuộc theo hệ điều hành
+
+Script private-net là **bash** (`init.sh`, `start-all.sh`, …).  
+- **macOS / Linux:** chạy trực tiếp trong Terminal.  
+- **Windows:** nên dùng **WSL2 (Ubuntu)** hoặc Git Bash; không khuyến nghị PowerShell thuần cho bước geth.
+
+Sau khi cài xong công cụ, kiểm tra:
+
+```bash
+node -v          # >= v18
+npm -v           # >= 9
+geth version     # 1.13.x
+mongod --version # hoặc: docker --version
+git --version
+curl --version
+python3 --version
+```
+
+---
+
+### 2.1. macOS
+
+```bash
+# Homebrew (nếu chưa có): https://brew.sh
+brew install node git curl python3
+
+# geth 1.13.x
+brew install ethereum
+geth version
+
+# MongoDB (chọn 1 trong 2)
+# A) Docker
+brew install --cask docker   # mở Docker Desktop, rồi:
+docker run -d --name ticket-mongo -p 27017:27017 mongo:7
+
+# B) MongoDB Community qua Homebrew
+brew tap mongodb/brew
+brew install mongodb-community@7.0
+brew services start mongodb-community@7.0
+```
+
+Nếu `brew install ethereum` ra geth ≥ 1.14: ưu tiên tải bản **1.13.x** từ [geth releases](https://geth.ethereum.org/downloads/) hoặc giữ pin phiên bản cũ.
+
+---
+
+### 2.2. Linux (Ubuntu / Debian)
+
+```bash
+sudo apt update
+sudo apt install -y curl git build-essential python3
+
+# Node.js 20 LTS (NodeSource)
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt install -y nodejs
+node -v && npm -v
+
+# geth — cách A: PPA ethereum (có thể ra bản mới hơn 1.13)
+sudo add-apt-repository -y ppa:ethereum/ethereum
+sudo apt update
+sudo apt install -y ethereum
+geth version
+
+# geth — cách B (khuyến nghị nếu cần đúng 1.13.x): tải binary
+# https://geth.ethereum.org/downloads/  → Linux amd64 1.13.x
+# Giải nén, đưa `geth` vào PATH, ví dụ:
+#   sudo mv geth /usr/local/bin/
+#   geth version
+
+# MongoDB — cách A: Docker
+sudo apt install -y docker.io
+sudo usermod -aG docker "$USER"   # đăng xuất/đăng nhập lại
+sudo docker run -d --name ticket-mongo -p 27017:27017 mongo:7
+
+# MongoDB — cách B: cài native (tóm tắt)
+# Làm theo docs MongoDB 7 cho Ubuntu: https://www.mongodb.com/docs/manual/tutorial/install-mongodb-on-ubuntu/
+```
+
+**Fedora / RHEL (tóm tắt):**
+
+```bash
+sudo dnf install -y git curl python3 nodejs npm
+# geth: tải binary 1.13.x từ geth.ethereum.org hoặc dùng package ethereum nếu có
+# Mongo: docker run ... mongo:7  (giống trên)
+```
+
+**Firewall (nếu RPC không gọi được từ máy khác trong LAN):** lab chỉ cần `127.0.0.1` — không mở cổng ra ngoài trừ khi chủ đích.
+
+---
+
+### 2.3. Windows
+
+#### Khuyến nghị: WSL2 + Ubuntu
+
+Private-net dùng bash/geth giống Linux. Cách ổn định nhất trên Windows:
+
+1. Cài **WSL2** (PowerShell Admin):
+
+```powershell
+wsl --install
+# Khởi động lại máy nếu được yêu cầu, rồi mở Ubuntu từ Start Menu
+```
+
+2. Trong Ubuntu (WSL), làm **giống mục 2.2 Linux** (Node, geth, Docker hoặc Mongo).
+
+3. Clone / mở project **trong filesystem Linux** (tránh ` /mnt/c/...` nếu có thể — nhanh và ít lỗi quyền file):
+
+```bash
+cd ~
+git clone <url-repo> ticket-anti-scalping
+cd ticket-anti-scalping
+```
+
+4. Docker trên WSL: cài **Docker Desktop for Windows** → Settings → Resources → WSL Integration → bật distro Ubuntu.
+
+5. MetaMask chạy trên **Windows browser** (Chrome/Edge). RPC vẫn là `http://127.0.0.1:8545` — WSL2 thường forward localhost tới Windows ổn.
+
+Kiểm tra từ PowerShell Windows:
+
+```powershell
+curl http://127.0.0.1:8545 -Method POST -ContentType "application/json" -Body '{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}'
+```
+
+#### Cách thay thế: Git Bash + geth Windows (hạn chế hơn)
+
+1. Cài [Git for Windows](https://git-scm.com/download/win) (có Git Bash).  
+2. Cài [Node.js LTS](https://nodejs.org/) (Windows installer).  
+3. Tải **geth Windows 1.13.x** từ [geth.ethereum.org/downloads](https://geth.ethereum.org/downloads/), giải nén, thêm thư mục có `geth.exe` vào **PATH**.  
+4. Cài [MongoDB Community](https://www.mongodb.com/try/download/community) hoặc Docker Desktop + container `mongo:7`.  
+5. Mở **Git Bash**, `cd` vào repo, chạy:
+
+```bash
+cd blockchain/private-net
+chmod +x scripts/*.sh
+./scripts/init.sh
+./scripts/start-all.sh
+```
+
+Nếu script báo lỗi đường dẫn / `python3` / `geth` not found: kiểm tra PATH trong Git Bash (`which geth`, `which python`, `which python3`). Đôi khi trên Windows lệnh là `python` — có thể tạo alias:
+
+```bash
+alias python3=python
+```
+
+**Lưu ý Windows:**
+
+| Vấn đề | Cách xử lý |
+|--------|------------|
+| CRLF làm script `.sh` lỗi | Trong repo: `git config core.autocrlf input` rồi checkout lại; hoặc `sed -i 's/\r$//' scripts/*.sh` |
+| Cổng bị chiếm | `netstat -ano \| findstr :5001` rồi Task Manager / `taskkill /PID … /F` |
+| Antivirus chặn geth | Thêm exception cho thư mục `blockchain/private-net` |
+| MetaMask “RPC lỗi” | Đảm bảo geth listen `127.0.0.1:8545`; tắt VPN thử lại |
+
+---
+
+### 2.4. So sánh nhanh
+
+| Hạng mục | macOS | Linux | Windows |
+|----------|-------|-------|---------|
+| Shell chạy private-net | Terminal (zsh/bash) | bash | **WSL2** (khuyên) hoặc Git Bash |
+| Cài Node | Homebrew / nvm | NodeSource / apt | Installer nodejs.org hoặc apt trong WSL |
+| Cài geth | `brew install ethereum` | PPA hoặc binary 1.13.x | Binary trong WSL / Windows PATH |
+| Mongo | Docker hoặc brew | Docker hoặc apt/official | Docker Desktop hoặc Mongo installer |
+| MetaMask | Browser macOS | Browser Linux | Browser Windows (RPC `127.0.0.1`) |
+
+---
+
+## 3. Thứ tự cài đặt dự án (bắt buộc)
+
+```
+1) geth private-net  →  2) deploy smart-contract  →  3) backend + Mongo  →  4) frontend
+```
+
+Mỗi lần chạy lại `init.sh` (xóa chain) phải **deploy lại contract** và cập nhật địa chỉ trong `.env`.
+
+Các lệnh bên dưới dùng chung cho macOS / Linux / WSL (và Git Bash nếu PATH đã ổn).
+
+---
+
+### Bước 1 — Mạng geth private-net
 
 ```bash
 cd blockchain/private-net
 chmod +x scripts/*.sh
 
-# Chỉ lần đầu (hoặc khi muốn xóa data chain và tạo lại)
+# Chỉ lần đầu (hoặc khi muốn reset chain từ đầu)
 ./scripts/init.sh
 
+# Mỗi lần làm việc
 ./scripts/start-all.sh
 ./scripts/connect-peers.sh
 ./scripts/status.sh
 ```
 
-Kiểm tra `chainId`:
+Kiểm tra RPC:
 
 ```bash
 curl -s -X POST http://127.0.0.1:8545 \
   -H 'Content-Type: application/json' \
   --data '{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}'
+# → result "0x3039" (= 12345)
 ```
 
-Kết quả mong đợi: `"result":"0x3039"` (hex của **12345**).
-
-**Unlock deployer** (cần cho deploy / faucet / mint admin):
-
-```text
-Địa chỉ: 0xdecc0bf86a34de96B161b1F910ce2684d36bb4B4
-Mật khẩu keystore: ticket123  (file password.txt)
-```
+Unlock deployer (nếu cần ký qua `personal_unlockAccount`):
 
 ```bash
 curl -s -X POST http://127.0.0.1:8545 \
@@ -255,70 +270,61 @@ curl -s -X POST http://127.0.0.1:8545 \
   --data '{"jsonrpc":"2.0","method":"personal_unlockAccount","params":["0xdecc0bf86a34de96B161b1F910ce2684d36bb4B4","ticket123",0],"id":1}'
 ```
 
-Dừng mạng: `./scripts/stop-nodes.sh`.
-
-Chi tiết thêm: [`blockchain/private-net/HUONG-DAN.md`](./blockchain/private-net/HUONG-DAN.md).
+Địa chỉ lab xem trong `blockchain/private-net/accounts.json`.  
+Mật khẩu keystore mặc định: `ticket123` (`password.txt`).
 
 ---
 
-### 6.2. Bước 2 — Compile, test và deploy smart contract
+### Bước 2 — Smart contract (compile + deploy)
 
 ```bash
 cd smart-contract
 npm install
+cp .env.example .env          # xem mục 4.1 — thường để trống DEPLOYER_PRIVATE_KEY trên lab
 npx hardhat compile
-npx hardhat test          # chạy trên Hardhat in-memory (không cần geth)
-```
+npx hardhat test              # không cần geth
 
-**Lưu ý:** dự án pin OpenZeppelin **`5.0.2`**. Bản OZ mới hơn có thể dùng opcode Cancun — **không tương thích** cấu hình Clique `evmVersion: paris`.
-
-Deploy lên geth (RPC `:8545` đang chạy, deployer đã unlock hoặc có `DEPLOYER_PRIVATE_KEY` trong `.env`):
-
-```bash
+# geth :8545 phải đang chạy
 npx hardhat run scripts/deploy.js --network localhost
 ```
 
-Script `deploy.js` sẽ:
+Sau deploy, script sẽ:
 
-1. Deploy `EventTicket` và `Marketplace`
-2. Gọi `configureEvent` cho loại vé mẫu (`eventChainId` 1 = Standard 0.01 ETH, 2 = VIP 0.05 ETH)
-3. Copy ABI vào `backend/src/abi/` và `frontend/src/services/abi/`
-4. Ghi `deployments/localhost.json`
-5. Cập nhật địa chỉ contract trong `backend/.env` và `frontend/.env` (nếu file đã tồn tại)
+1. Ghi `smart-contract/deployments/localhost.json`
+2. Copy ABI vào `backend/src/abi/` và `frontend/src/services/abi/`
+3. **Tự cập nhật** địa chỉ contract trong `backend/.env` và `frontend/.env` (nếu file đã tồn tại)
+4. In ra gợi ý `.env` trên terminal
 
-Mỗi lần chạy lại `init.sh` (xóa chain) → **bắt buộc deploy lại** → restart backend.
+Lưu địa chỉ từ file deploy:
+
+```bash
+cat smart-contract/deployments/localhost.json
+# EventTicket, Marketplace, deployer, chainId
+```
 
 ---
 
-### 6.3. Bước 3 — MongoDB và Backend
+### Bước 3 — MongoDB + Backend
 
-**MongoDB (Docker):**
+**MongoDB bằng Docker:**
 
 ```bash
 docker run -d --name ticket-mongo -p 27017:27017 mongo:7
+# lần sau: docker start ticket-mongo
 ```
 
-Hoặc dùng Mongo local / Atlas và chỉnh `MONGODB_URI`.
+Hoặc Mongo cài sẵn / Atlas — chỉnh `MONGODB_URI`.
 
 ```bash
 cd backend
 npm install
 cp .env.example .env
-# Kiểm tra PORT=5001, RPC, địa chỉ contract sau deploy
+# Điền theo mục 4.2 (địa chỉ contract lấy từ bước 2)
 npm run seed
 npm run dev
 ```
 
-Seed tạo:
-
-| Email | Mật khẩu | Vai trò |
-|-------|----------|---------|
-| `admin@ticket.local` | `admin123` | admin |
-| `organizer@ticket.local` | `organizer123` | organizer |
-
-và sự kiện mẫu **Đêm Nhạc Anti-Scalping** (Standard / VIP khớp `eventChainId` 1 và 2).
-
-Kiểm tra health:
+Kiểm tra:
 
 ```bash
 curl -s http://127.0.0.1:5001/api/health
@@ -326,54 +332,217 @@ curl -s http://127.0.0.1:5001/api/health
 
 ---
 
-### 6.4. Bước 4 — Frontend
+### Bước 4 — Frontend
 
 ```bash
 cd frontend
 npm install
 cp .env.example .env
-# VITE_CHAIN_ID=12345, VITE_RPC_URL, địa chỉ contract sau deploy
+# Điền theo mục 4.3 (địa chỉ contract khớp backend)
 npm run dev
 ```
 
-Mở **http://localhost:5173**.  
+Mở **http://localhost:5173**  
 Vite proxy: `/api` → `http://localhost:5001`.
-
-Build production: `npm run build && npm run preview`.
 
 ---
 
-### 6.5. Chạy nhanh (đã quen cấu hình)
+## 4. File `.env` — cách lấy và điền thông số
+
+Có **3 file `.env`** (không commit lên git — chỉ commit `*.env.example`):
+
+| File | Vai trò |
+|------|---------|
+| `smart-contract/.env` | Deploy Hardhat (Sepolia / private key tuỳ chọn) |
+| `backend/.env` | API, Mongo, JWT, RPC, địa chỉ contract, faucet |
+| `frontend/.env` | Vite: API base, chain, RPC, địa chỉ contract (prefix `VITE_`) |
+
+**Quy tắc chung**
+
+1. Copy từ example: `cp .env.example .env`
+2. Địa chỉ contract **chỉ có sau khi deploy** — lấy từ `smart-contract/deployments/localhost.json` hoặc log deploy
+3. Backend và frontend phải dùng **cùng** `EventTicket` / `Marketplace` và cùng `CHAIN_ID`
+4. Đổi contract (deploy lại) → sửa cả `backend/.env` + `frontend/.env` → **restart** backend & frontend
+
+---
+
+### 4.1. `smart-contract/.env`
 
 ```bash
-# Terminal 1 — geth
-cd blockchain/private-net && ./scripts/start-all.sh
+cd smart-contract
+cp .env.example .env
+```
 
-# Terminal 2 — deploy (lần đầu / sau reset chain)
-cd smart-contract && npx hardhat run scripts/deploy.js --network localhost
+| Biến | Bắt buộc? | Cách lấy / giá trị lab | Ghi chú |
+|------|-----------|------------------------|---------|
+| `SEPOLIA_RPC_URL` | Không (lab) | `https://rpc.sepolia.org` hoặc Infura/Alchemy | Chỉ khi deploy mạng Sepolia |
+| `DEPLOYER_PRIVATE_KEY` | Không (lab) | Private key ví test (prefix `0x`) | Lab geth thường **unlock** deployer — để trống là được |
+| `ETHERSCAN_API_KEY` | Không | [etherscan.io/apis](https://etherscan.io/apis) | Verify source trên explorer |
+| `RELAYER_ADDRESS` | Không | Ví relayer (nếu dùng bridge buổi 5) | Có thể để trống |
 
-# Terminal 3 — backend
-cd backend && npm run seed && npm run dev
+**Lab local:** file có thể gần như trống. Deploy qua `--network localhost` dùng RPC Hardhat config (`http://127.0.0.1:8545`) và tài khoản đã unlock trên geth.
 
-# Terminal 4 — frontend
-cd frontend && npm run dev
+**Nếu muốn ký bằng private key:** export key từ keystore deployer (node1), ghi vào `DEPLOYER_PRIVATE_KEY=0x...` — **không** dùng ví thật có tiền.
+
+---
+
+### 4.2. `backend/.env`
+
+```bash
+cd backend
+cp .env.example .env
+```
+
+#### a) Server & Mongo & JWT
+
+| Biến | Cách lấy / giá trị | Giải thích |
+|------|-------------------|------------|
+| `PORT` | `5001` | Cổng API. macOS hay chiếm `5000` (AirPlay) → dùng `5001` |
+| `NODE_ENV` | `development` | Môi trường chạy |
+| `MONGODB_URI` | `mongodb://127.0.0.1:27017/ticket-anti-scalping` | URI Mongo local/Docker. Atlas: lấy connection string trên cloud.mongodb.com |
+| `JWT_SECRET` | Tự đặt chuỗi dài, bí mật | Dùng ký JWT đăng nhập. **Đổi** khi lên môi trường thật |
+| `JWT_EXPIRES_IN` | `7d` | Thời hạn token (vd `7d`, `24h`) |
+| `CLIENT_ORIGIN` | `http://localhost:5173` | Origin frontend cho CORS |
+
+Tạo JWT secret nhanh:
+
+```bash
+openssl rand -hex 32
+```
+
+#### b) Blockchain / RPC
+
+| Biến | Cách lấy / giá trị lab | Giải thích |
+|------|------------------------|------------|
+| `NETWORK_NAME` | `ticket-private-clique` | Tên mạng (hiển thị / hóa đơn) |
+| `CHAIN_ID` | `12345` | Khớp genesis private-net (`accounts.json`) |
+| `RPC_URL` | `http://127.0.0.1:8545` | RPC **node1**. Dự phòng: `:8546` (node2) |
+| `SEPOLIA_RPC_URL` | URL Sepolia (tuỳ chọn) | Chỉ khi backend trỏ testnet |
+
+Kiểm tra RPC sống:
+
+```bash
+curl -s -X POST "$RPC_URL" -H 'Content-Type: application/json' \
+  --data '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
+```
+
+#### c) Địa chỉ smart contract (quan trọng)
+
+| Biến | Cách lấy |
+|------|----------|
+| `TICKET_CONTRACT_ADDRESS` | Sau deploy → `deployments/localhost.json` → field `EventTicket` |
+| `MARKETPLACE_CONTRACT_ADDRESS` | Cùng file → field `Marketplace` |
+
+```bash
+# Ví dụ đọc nhanh
+node -e 'const j=require("./smart-contract/deployments/localhost.json"); console.log(j.EventTicket); console.log(j.Marketplace)'
+```
+
+Hoặc chép từ log cuối lệnh deploy (`--- .env hints ---`).  
+Nếu đã `cp .env.example .env` **trước** khi deploy, script deploy thường **tự ghi** hai địa chỉ này.
+
+#### d) Deployer / faucet admin
+
+| Biến | Cách lấy / giá trị lab | Giải thích |
+|------|------------------------|------------|
+| `DEPLOYER_ADDRESS` | `0xdecc0bf86a34de96B161b1F910ce2684d36bb4B4` | Trong `blockchain/private-net/accounts.json` → `accounts.deployer.address` |
+| `GETH_PASSWORD` | `ticket123` (tuỳ chọn) | Mật khẩu unlock keystore geth |
+| `DEPLOYER_PRIVATE_KEY` | Tuỳ chọn | Nếu không dùng unlock geth — backend ký bằng key này |
+
+**Lab khuyến nghị:** để geth unlock deployer; chỉ cần đúng `DEPLOYER_ADDRESS`.
+
+#### e) Mẫu `backend/.env` (lab đầy đủ)
+
+```env
+PORT=5001
+NODE_ENV=development
+
+MONGODB_URI=mongodb://127.0.0.1:27017/ticket-anti-scalping
+
+JWT_SECRET=lab-doi-chuoi-nay-bang-openssl-rand
+JWT_EXPIRES_IN=7d
+
+NETWORK_NAME=ticket-private-clique
+CHAIN_ID=12345
+RPC_URL=http://127.0.0.1:8545
+
+# Thay bằng địa chỉ thật sau deploy
+TICKET_CONTRACT_ADDRESS=0x83e94d633898cc3f31E89183E2aFC4e5c572F6b7
+MARKETPLACE_CONTRACT_ADDRESS=0x6378075fAd0B4B65D8d77735828a6898589AD488
+
+DEPLOYER_ADDRESS=0xdecc0bf86a34de96B161b1F910ce2684d36bb4B4
+
+CLIENT_ORIGIN=http://localhost:5173
+```
+
+> Địa chỉ contract ở trên chỉ là **ví dụ** từ một lần deploy — máy bạn lấy từ `localhost.json` của chính mình.
+
+---
+
+### 4.3. `frontend/.env`
+
+```bash
+cd frontend
+cp .env.example .env
+```
+
+Biến Vite **phải** bắt đầu bằng `VITE_` thì mới vào được `import.meta.env`.
+
+| Biến | Cách lấy / giá trị lab | Giải thích |
+|------|------------------------|------------|
+| `VITE_API_BASE_URL` | `/api` | Gọi qua proxy Vite → backend `:5001`. Production có thể đặt URL tuyệt đối |
+| `VITE_NETWORK_NAME` | `Ticket Private Clique` | Tên hiện khi MetaMask add chain |
+| `VITE_CHAIN_ID` | `12345` | **Phải khớp** `backend` `CHAIN_ID` và geth |
+| `VITE_RPC_URL` | `http://127.0.0.1:8545` | RPC MetaMask / ethers phía browser |
+| `VITE_TICKET_CONTRACT_ADDRESS` | = `TICKET_CONTRACT_ADDRESS` backend | Từ `localhost.json` → `EventTicket` |
+| `VITE_MARKETPLACE_CONTRACT_ADDRESS` | = `MARKETPLACE_CONTRACT_ADDRESS` backend | Từ `localhost.json` → `Marketplace` |
+
+#### Mẫu `frontend/.env`
+
+```env
+VITE_API_BASE_URL=/api
+
+VITE_NETWORK_NAME=Ticket Private Clique
+VITE_CHAIN_ID=12345
+VITE_RPC_URL=http://127.0.0.1:8545
+
+VITE_TICKET_CONTRACT_ADDRESS=0x83e94d633898cc3f31E89183E2aFC4e5c572F6b7
+VITE_MARKETPLACE_CONTRACT_ADDRESS=0x6378075fAd0B4B65D8d77735828a6898589AD488
+```
+
+Sau khi sửa `.env` frontend: **tắt rồi chạy lại** `npm run dev` (Vite chỉ đọc env lúc start).
+
+---
+
+### 4.4. Checklist đồng bộ `.env`
+
+| Kiểm tra | Backend | Frontend |
+|----------|---------|----------|
+| Chain ID | `CHAIN_ID=12345` | `VITE_CHAIN_ID=12345` |
+| RPC | `RPC_URL=…:8545` | `VITE_RPC_URL=…:8545` |
+| EventTicket | `TICKET_CONTRACT_ADDRESS` | `VITE_TICKET_CONTRACT_ADDRESS` |
+| Marketplace | `MARKETPLACE_CONTRACT_ADDRESS` | `VITE_MARKETPLACE_CONTRACT_ADDRESS` |
+| Giá trị hai bên | **Giống hệt** (checksum không phân biệt hoa thường) | |
+
+```bash
+# So nhanh (từ root repo)
+grep -E 'TICKET_CONTRACT|MARKETPLACE_CONTRACT|CHAIN_ID|VITE_CHAIN' backend/.env frontend/.env
 ```
 
 ---
 
-## 7. Cấu hình MetaMask
-
+## 5. MetaMask
 
 | Trường | Giá trị |
 |--------|---------|
 | Network name | Ticket Private Clique |
 | RPC URL | `http://127.0.0.1:8545` |
 | Chain ID | `12345` |
-| Currency symbol | ETH |
+| Currency | ETH |
 
-Frontend có thể gợi ý chuyển mạng nếu đang sai chain.
+Import deployer (lab): keystore trong `blockchain/private-net/node1/keystore/` · mật khẩu `ticket123`.
 
-Helper thêm mạng:
+Helper UI (tuỳ chọn):
 
 ```bash
 cd blockchain/private-net
@@ -381,232 +550,101 @@ cd blockchain/private-net
 # http://127.0.0.1:8765/
 ```
 
-**Import ví lab:** dùng keystore trong `node1/keystore/` (mật khẩu `ticket123`) hoặc private key ví do admin tạo trên `/admin`. Ví người mua cần có ETH (faucet admin) để trả gas + giá vé.
+---
+
+## 6. Tài khoản lab
+
+| Email | Mật khẩu | Vai trò |
+|-------|----------|---------|
+| `admin@ticket.local` | `admin123` | admin |
+| `organizer@ticket.local` | `organizer123` | organizer |
+
+Tạo bằng `cd backend && npm run seed`.
+
+| URL | Mô tả |
+|-----|--------|
+| http://localhost:5173 | Trang người dùng |
+| http://localhost:5173/admin | Admin / organizer |
+| http://localhost:5173/ledger | Dòng tiền công khai theo sự kiện |
 
 ---
 
-## 8. Luồng hoạt động chi tiết
+## 7. Khởi động hàng ngày
 
-### 8.1. Luồng sơ cấp — mua vé từ ban tổ chức
+Khi đã `npm install` và đã `init` mạng:
 
-```
-User mở Event Detail → chọn loại vé (eventChainId) → "Mua vé"
-    → MetaMask ký mintTicket(eventChainId) + gửi đúng priceWei
-    → EventTicket kiểm tra:
-          · event active
-          · còn slot totalSupply
-          · ticketsPerWalletPerEvent < 2
-          · msg.value == priceWei
-    → Mint ERC-721, ghi TicketInfo, tạo TicketBlock (hash nối prev)
-    → Emit TicketMinted + TicketBlockCreated
-    → Backend listener bắt event → upsert Ticket + Transaction (type: mint)
-    → UI /my-tickets hiển thị NFT (đọc DB cache + có thể verify on-chain)
-```
+```bash
+# Terminal 1 — geth
+cd blockchain/private-net
+./scripts/start-all.sh && ./scripts/connect-peers.sh
 
-### 8.2. Luồng thứ cấp — chợ resale
+# Terminal 2 — Mongo (Docker)
+docker start ticket-mongo
 
-```
-Chủ vé hết thời gian khóa → nhập giá ≤ 110% giá gốc → approve Marketplace → listTicket
-    → Emit TicketListed → listener: Ticket.status = listed_for_resale
+# Terminal 3 — backend
+cd backend && npm run dev
 
-Người mua thấy listing → buyResaleTicket{ value: price }
-    → Kiểm tra listing active, đủ ETH, vẫn trong quy tắc
-    → Chuyển NFT buyer; ETH: royalty 5% → treasury, còn lại → seller
-    → Listing inactive
-    → Emit TicketSold → listener: ownerWallet = buyer, status = owned, ghi Transaction (resale)
+# Terminal 4 — frontend
+cd frontend && npm run dev
 ```
 
-### 8.3. Luồng quản trị
-
-```
-Admin/Organizer đăng nhập /admin (JWT)
-    → Dashboard: thống kê mint, resale, royalty
-    → Cấp ETH / tạo ví lab
-    → Mint batch (adminMint) cho địa chỉ test
-    → Xem chuỗi TicketBlock / verifyChain
-    → Quản lý user: role, khóa tài khoản (admin)
-```
-
-### 8.4. Luồng đồng bộ Blockchain → DB
-
-```
-geth seal block mới
-    → blockchainListener.js poll/subscribe
-    → TicketMinted | TicketListed | TicketSold | TicketBlockCreated
-    → Cập nhật tickets / transactions
-    → Không cho client API tự ghi đè trạng thái on-chain
-```
-
-### 8.5. Mạng hỗ trợ
-
-
-| Mạng | Chain ID | RPC | Mục đích |
-|------|----------|-----|----------|
-| Geth Private Clique | 12345 | `http://127.0.0.1:8545` | Dev chính |
-| Hardhat in-memory | 31337 | (nội bộ) | Unit test |
-| Sepolia | 11155111 | RPC công khai / Infura | Demo public |
+Dừng geth: `cd blockchain/private-net && ./scripts/stop-nodes.sh`
 
 ---
 
-## 9. Giải thích từng thành phần
+## 8. Smoke test
 
-### 9.1. `blockchain/private-net` — Mạng lab
-
-- **Clique PoA**, 2 node (signer peer), `chainId 12345`.
-- Genesis cấp ETH lớn cho deployer để deploy và faucet.
-- Scripts: `init`, `start-all`, `connect-peers`, `status`, `stop-nodes`, demo TicketBlock, serve MetaMask helper.
-- Đây là “Ethereum thu nhỏ” trên máy local: không phụ thuộc testnet công cộng khi phát triển.
-
-### 9.2. `smart-contract/EventTicket.sol`
-
-- ERC-721 tên **Ticket Anti-Scalping** (`TIX`).
-- `configureEvent(eventChainId, totalSupply, priceWei, name)` — owner cấu hình loại vé.
-- `mintTicket(eventChainId)` payable — mua sơ cấp.
-- Mapping `ticketsPerWalletPerEvent`, `soldCount`, `TicketInfo(eventChainId, price, mintedAt)`.
-- **TicketBlock**: chuỗi hash liên kết; `latestBlockHash` / `latestBlockIndex` cho tip.
-- Ownable + ReentrancyGuard; treasury organizer có thể cập nhật.
-
-### 9.3. `smart-contract/Marketplace.sol`
-
-- Giữ tham chiếu bất biến tới `EventTicket`.
-- `listTicket`, `buyResaleTicket`, hủy listing (seller).
-- Hằng số: `MAX_RESALE_PERCENT = 110`, `ROYALTY_PERCENT = 5`.
-- `transferLockSeconds` cấu hình được (local ngắn / Sepolia dài).
-- View helpers: `getMaxAllowedPrice`, `getUnlockTime`, `getListing`.
-
-### 9.4. `smart-contract/scripts/deploy.js` & Hardhat
-
-- Mạng `localhost` → geth `:8545` / chainId 12345.
-- Sau deploy đồng bộ ABI + địa chỉ sang backend/frontend — giảm cấu hình tay.
-- Test: `EventTicket.test.js`, `Marketplace.test.js` (mint vượt supply, trần giá, khóa chuyển nhượng).
-
-### 9.5. Backend — Express API
-
-**Entry:** `src/server.js` — CORS, JSON, Morgan, rate limit `/api`, gắn routes, kết nối Mongo, start listener.
-
-**Models (MongoDB):**
-
-| Collection | Vai trò |
-|------------|---------|
-| `users` | Email, passwordHash, walletAddress, role (`user` / `organizer` / `admin`) |
-| `events` | Metadata sự kiện + `ticketTypes[].eventChainId` khớp contract |
-| `tickets` | **Cache** NFT: tokenId, ownerWallet, originalPrice, status |
-| `transactions` | Lịch sử mint/resale theo `txHash` |
-| `labwallets` | Ví lab tạo bởi admin (faucet) |
-
-**Routes chính:**
-
-| Prefix | Chức năng |
-|--------|-----------|
-| `/api/auth` | register, login, link-wallet |
-| `/api/events` | danh sách / chi tiết / CRUD (theo quyền) |
-| `/api/tickets` | vé theo ví, chuỗi TicketBlock |
-| `/api/marketplace` | listing active, lịch sử giao dịch |
-| `/api/admin` | dashboard, users, create-wallets, mint-tickets, faucet |
-
-**Services:**
-
-- `blockchainService.js` — đọc contract (ethers).
-- `blockchainListener.js` — đồng bộ event → DB.
-- `adminChainService.js` — unlock/ký bằng deployer: chuyển ETH, `adminMintBatch`.
-
-**Middlewares:** JWT (`authMiddleware`), rate limiter, error handler chuẩn `{ success, data | error }`.
-
-### 9.6. Frontend — React + Vite
-
-| Route | Mô tả |
-|-------|--------|
-| `/` | Danh sách sự kiện |
-| `/events/:id` | Chi tiết + mua vé sơ cấp |
-| `/my-tickets` | Vé của ví MetaMask đang kết nối |
-| `/marketplace` | Xem listing / mua lại / (luồng đăng bán) |
-| `/user` | Đăng ký, đăng nhập, liên kết ví |
-| `/admin` | AdminLTE: sự kiện, faucet, mint, chuỗi block, quản lý user |
-
-**Context:**
-
-- `AuthContext` — JWT session.
-- `WalletContext` / `useWallet` — kết nối MetaMask, đúng chainId, gọi contract qua `services/contract.js`.
-
-Giao dịch thay đổi ownership **chỉ** qua MetaMask → contract; API chỉ phục vụ đọc metadata và admin lab.
-
-### 9.7. Vai trò dữ liệu: on-chain vs off-chain
-
-```
-On-chain (thật):     ownership NFT, giá mint, listing, royalty, TicketBlock
-Off-chain (cache):   email/role, mô tả sự kiện, ảnh bìa, index tìm kiếm, thống kê UI
-```
-
-Nếu DB lệch, ưu tiên đọc lại từ RPC/contract hoặc chạy lại listener từ block đã biết.
+1. `./scripts/status.sh` — 2 node peer, đang seal block  
+2. `curl http://127.0.0.1:5001/api/health` — có địa chỉ ticket/marketplace  
+3. Mở `http://localhost:5173` — thấy sự kiện  
+4. `/admin` đăng nhập `admin@ticket.local` / `admin123`  
+5. Tab **Cấp ETH / Ví** — tạo ví lab  
+6. Tab **Mint vé** — mint `eventChainId = 1`  
+7. Tab **Chuỗi block vé** — tip tăng  
+8. MetaMask đúng chain `12345` — `/my-tickets` thấy NFT  
+9. Sau ~**60s** khóa chuyển nhượng — thử resale ≤ **110%** giá gốc  
+10. `/ledger` — dòng tiền công khai theo sự kiện  
 
 ---
 
-## 10. Tài khoản & cổng lab
+## 9. Xử lý lỗi thường gặp
 
-
-| Hạng mục | Giá trị |
-|----------|---------|
-| RPC | `http://127.0.0.1:8545` |
-| Chain ID | `12345` |
-| API | `http://localhost:5001` |
-| UI | `http://localhost:5173` |
-| Admin | `admin@ticket.local` / `admin123` |
-| Organizer | `organizer@ticket.local` / `organizer123` |
-| Deployer | `0xdecc0bf86a34de96B161b1F910ce2684d36bb4B4` |
-| Keystore password | `ticket123` |
-| Transfer lock (local) | ~60 giây |
-| Resale cap | 110% giá gốc |
-| Royalty | 5% |
-
----
-
-## 11. Smoke test end-to-end
-
-1. `blockchain/private-net/./scripts/status.sh` — 2 node peer, đang seal block.  
-2. `curl http://127.0.0.1:5001/api/health` — có địa chỉ `ticket` + `marketplace`.  
-3. Mở `http://localhost:5173` — thấy sự kiện mẫu.  
-4. Đăng nhập `/admin` bằng admin seed.  
-5. Tab **Cấp ETH / Ví** → tạo 1–2 ví lab.  
-6. Tab **Mint vé** → mint `eventChainId = 1` cho các ví đó.  
-7. Tab **Chuỗi block vé** — tip tăng, verify chain hợp lệ.  
-8. Import ví lab vào MetaMask → `/my-tickets` thấy NFT.  
-9. Đợi hết khóa (~60s) → list resale ≤ 110% → ví khác mua lại → kiểm tra royalty treasury.  
-10. Tab **Người dùng & quyền** — đổi role / khóa user thử phân quyền.
-
----
-
-## 12. Xử lý lỗi thường gặp
-
-
-| Hiện tượng | Hướng xử lý |
-|------------|-------------|
-| `eth_chainId` không trả `0x3039` | Chưa start geth / sai cổng; chạy `start-all.sh` + `status.sh` |
-| Deploy revert / không gửi được tx | Unlock deployer hoặc set `DEPLOYER_PRIVATE_KEY`; kiểm tra số dư |
+| Hiện tượng | Cách xử lý |
+|------------|------------|
+| `EADDRINUSE :5001` | macOS/Linux: `lsof -i :5001` rồi `kill` PID. Windows: `netstat -ano \| findstr :5001` rồi `taskkill /PID … /F` |
+| Deploy revert / không gửi tx | Unlock deployer hoặc set `DEPLOYER_PRIVATE_KEY`; kiểm tra số dư |
 | Backend không sync vé | Sai địa chỉ contract trong `.env`; restart sau deploy; RPC down |
-| Frontend gọi API lỗi CORS / 404 | Backend `:5001`, `VITE_API_BASE_URL=/api`, proxy Vite |
-| MetaMask sai mạng | Thêm chain 12345, RPC `127.0.0.1:8545` |
-| `listTicket` revert TransferLocked | Chưa hết thời gian khóa sau mint |
-| `listTicket` / buy revert PriceExceedsResaleCap | Giá > 110% giá gốc |
-| Compile OZ / opcode lạ | Giữ OpenZeppelin 5.0.2 + `evmVersion: paris` |
-| Reset chain mất contract | `init.sh` lại → deploy lại → cập nhật `.env` → restart backend |
+| Frontend CORS / 404 API | Backend `:5001`, `VITE_API_BASE_URL=/api`, proxy Vite |
+| MetaMask sai mạng | Add chain `12345`, RPC `127.0.0.1:8545` |
+| Sau `init.sh` mọi thứ “mất” | Deploy lại contract → cập nhật `.env` → seed lại → restart backend/frontend |
+| OpenZeppelin / opcode lỗi | Giữ OZ **5.0.2** (pin trong `package.json`) — bản mới hơn có thể không khớp Clique Paris |
+| Script `.sh` lỗi trên Windows | Dùng **WSL2**; hoặc sửa CRLF (`sed -i 's/\r$//' scripts/*.sh`); kiểm tra `which geth` |
+| `geth: command not found` (Linux) | Cài binary 1.13.x vào `/usr/local/bin` hoặc `export PATH=...` |
+| Docker permission denied (Linux) | `sudo usermod -aG docker $USER` rồi đăng nhập lại |
 
 ---
 
-## 13. Tài liệu liên quan
+## Cấu trúc thư mục (tóm tắt)
 
-| File | Nội dung |
-|------|----------|
-| [`HUONG-DAN-CAI-DAT.md`](./HUONG-DAN-CAI-DAT.md) | Checklist cài đặt đầy đủ, biến môi trường, troubleshooting mở rộng |
-| [`blockchain/private-net/HUONG-DAN.md`](./blockchain/private-net/HUONG-DAN.md) | Chi tiết geth 2 node |
-| [`luong-du-an.md`](./luong-du-an.md) | Luồng nghiệp vụ ngắn |
-| [`thiet-ke-du-an.md`](./thiet-ke-du-an.md) | Schema MongoDB, API, thiết kế contract |
-| [`phan-cong-3-nguoi.md`](./phan-cong-3-nguoi.md) | Phân công nhóm |
-| [`smart-contract/README.md`](./smart-contract/README.md) | Hardhat / contract |
-| [`backend/README.md`](./backend/README.md) | API backend |
-| [`frontend/README.md`](./frontend/README.md) | UI React |
+```
+ticket-anti-scalping/
+├── blockchain/private-net/   # geth Clique, scripts start/init
+├── smart-contract/           # EventTicket, Marketplace, deploy
+├── backend/                  # Express API, listener, Mongo
+├── frontend/                 # React user + admin
+├── README.md                 # File này
+├── HUONG-DAN-CAI-DAT.md
+└── HUONG-DAN-HE-THONG.md
+```
 
 ---
 
-## Giấy phép & ghi chú
+## Cơ chế chống scalping (on-chain)
 
-Mã nguồn phục vụ mục đích học tập / đồ án. **Không** dùng private key lab trên mainnet hoặc ví có tiền thật. File `.env`, `password.txt`, keystore chứa bí mật — đã nằm trong `.gitignore`; không commit lên GitHub.
+| Cơ chế | Giá trị lab |
+|--------|-------------|
+| Tối đa vé / ví / hạng (mint thường) | **2** |
+| Trần giá resale | **110%** giá gốc |
+| Khóa chuyển nhượng sau mint | **60s** (local), ~24h (Sepolia) |
+| Royalty resale | **5%** về treasury ban tổ chức |
+| TicketBlock | Mỗi mint nối `prevBlockHash` → `blockHash` |

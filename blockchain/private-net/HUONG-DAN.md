@@ -585,4 +585,4 @@ Chi tiết nghiệp vụ + script demo:
 - [ ] `status.sh`: chainId 12345, peers >= 1, tip tăng
 - [ ] MetaMask thêm mạng `12345` / RPC `8545`
 - [ ] Hardhat deploy `--network localhost` thành công
-- [ ] Mint vé → tip TicketBlock tăng, `verifyChain` hợp lệ (`TICKET-BLOCK.md`)
+- [ ] Mint vé rồi tip TicketBlock tăng, `verifyChain` hợp lệ (`TICKET-BLOCK.md`)

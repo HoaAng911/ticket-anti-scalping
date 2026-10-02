@@ -42,8 +42,8 @@ Chuỗi là **toàn cục**: mint vé sự kiện A rồi sự kiện B vẫn n�
 2. Deploy contract (một lần / sau reset chain):  
    `cd ../../smart-contract && npx hardhat run scripts/deploy.js --network localhost`  
 3. Backend + seed + frontend  
-4. Admin → **Mint vé** (hoặc user mua vé)  
-5. Admin → **Chuỗi block vé**: tip tăng, `verifyChain = HỢP LỆ`  
+4. Admin rồi **Mint vé** (hoặc user mua vé)  
+5. Admin rồi **Chuỗi block vé**: tip tăng, `verifyChain = HỢP LỆ`  
 6. Script demo:
 
 ```bash

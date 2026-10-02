@@ -14,6 +14,8 @@ const ticketSchema = new mongoose.Schema(
     },
     mintedAt: { type: Date, required: true },
     listingPrice: { type: Number, default: null },
+    /** Exact wei string for resale payment (avoid float ETH round-trip) */
+    listingPriceWei: { type: String, default: null },
     // Chuỗi TicketBlock on-chain (liên kết hash với block trước)
     blockIndex: { type: Number, default: null },
     prevBlockHash: { type: String, default: null },

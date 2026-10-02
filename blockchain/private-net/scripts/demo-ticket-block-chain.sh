@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Demo nghiệp vụ TicketBlock trên geth private-net:
-#   mỗi lần mint vé → sinh node (TicketBlock) mới → prevBlockHash liên kết node trước.
+#   mỗi lần mint vé rồi sinh node (TicketBlock) mới rồi prevBlockHash liên kết node trước.
 #
 # Điều kiện:
 #   - node1 RPC :8545 đang chạy
@@ -135,7 +135,7 @@ print(f"    verify    = {chain.get('verifyChain')}")
 for b in chain.get("newBlocks") or []:
     print(
         f"    NEW node#{b['index']} token={b['tokenId']} "
-        f"prev={b['prevBlockHash'][:14]}… → {b['blockHash'][:14]}…"
+        f"prev={b['prevBlockHash'][:14]}… rồi {b['blockHash'][:14]}…"
     )
 after = int(chain.get("tipAfter") or 0)
 assert after == before + len(chain.get("newBlocks") or []), "tip không tăng đúng số vé mint"

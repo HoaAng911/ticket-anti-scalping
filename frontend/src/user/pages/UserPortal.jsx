@@ -8,19 +8,19 @@ import {
   CalendarDays,
   Ticket,
   Store,
-  Shield,
   Mail,
   KeyRound,
   AlertCircle,
   CheckCircle2,
   Sparkles,
+  FileText,
 } from "lucide-react";
-import { useAuth } from "../context/AuthContext.jsx";
-import { useWallet } from "../hooks/useWallet.js";
-import { getEvents, getListings, getMyTickets } from "../services/api.js";
+import { useAuth } from "../../context/AuthContext.jsx";
+import { useWallet } from "../../hooks/useWallet.js";
+import { getEvents, getListings, getMyTickets } from "../../services/api.js";
 
 export default function UserPortal() {
-  const { user, login: authLogin, register: authRegister, logout, bindWallet, isAdmin } = useAuth();
+  const { user, login: authLogin, register: authRegister, logout, bindWallet } = useAuth();
   const { account, connect, connecting, wrongNetwork, ensureNetwork, networkName } = useWallet();
   const [mode, setMode] = useState("login");
   const [email, setEmail] = useState("");
@@ -85,16 +85,8 @@ export default function UserPortal() {
         </div>
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "minmax(280px, 340px) 1fr",
-          gap: "1.25rem",
-          alignItems: "start",
-        }}
-        className="user-portal-grid"
-      >
-        <aside style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+      <div className="user-portal-grid">
+        <aside className="user-portal-aside">
           {!user ? (
             <div className="user-event-card">
               <h3 style={{ display: "flex", alignItems: "center", gap: 8, margin: 0 }}>
@@ -120,8 +112,8 @@ export default function UserPortal() {
                 onSubmit={onAuth}
                 style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}
               >
-                <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: "0.9rem" }}>
-                  <span style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--u-muted)" }}>
+                <label className="user-field">
+                  <span>
                     <Mail size={14} /> Email
                   </span>
                   <input
@@ -129,18 +121,10 @@ export default function UserPortal() {
                     required
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    style={{
-                      padding: "0.55rem 0.7rem",
-                      borderRadius: 12,
-                      border: "1px solid var(--u-border)",
-                      background: "rgba(0,0,0,0.25)",
-                      color: "var(--u-text)",
-                      font: "inherit",
-                    }}
                   />
                 </label>
-                <label style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: "0.9rem" }}>
-                  <span style={{ display: "flex", alignItems: "center", gap: 6, color: "var(--u-muted)" }}>
+                <label className="user-field">
+                  <span>
                     <KeyRound size={14} /> Mật khẩu
                   </span>
                   <input
@@ -149,14 +133,6 @@ export default function UserPortal() {
                     minLength={6}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    style={{
-                      padding: "0.55rem 0.7rem",
-                      borderRadius: 12,
-                      border: "1px solid var(--u-border)",
-                      background: "rgba(0,0,0,0.25)",
-                      color: "var(--u-text)",
-                      font: "inherit",
-                    }}
                   />
                 </label>
                 {error && (
@@ -187,12 +163,6 @@ export default function UserPortal() {
               <button type="button" className="user-btn secondary" onClick={logout}>
                 <LogOut size={16} /> Đăng xuất
               </button>
-              {isAdmin && (
-                <p className="user-meta" style={{ margin: 0 }}>
-                  <Shield size={14} style={{ verticalAlign: -2 }} /> Có quyền quản trị —{" "}
-                  <Link to="/admin">mở admin</Link>
-                </p>
-              )}
               {msg && (
                 <div className={`user-alert ${msg.includes("Đã") ? "ok" : "err"}`}>
                   {msg.includes("Đã") ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
@@ -244,6 +214,15 @@ export default function UserPortal() {
               <Ticket size={28} color="var(--u-accent-2)" />
               <strong>Vé của tôi</strong>
               <span className="user-meta">{tickets.length} vé (theo ví đang nối)</span>
+            </Link>
+            <Link
+              to="/my-invoices"
+              className="user-event-card"
+              style={{ textDecoration: "none", color: "inherit" }}
+            >
+              <FileText size={28} color="var(--u-accent)" />
+              <strong>Hóa đơn của tôi</strong>
+              <span className="user-meta">Xem / in PDF GTGT</span>
             </Link>
             <Link
               to="/marketplace"

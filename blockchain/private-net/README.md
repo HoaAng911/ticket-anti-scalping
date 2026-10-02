@@ -28,7 +28,7 @@ cp -n password.txt.example password.txt
 # Mạng geth phải đang chạy
 ./scripts/serve-metamask.sh
 # Mở trình duyệt: http://127.0.0.1:8765/
-# Bấm "Kết nối MetaMask" → Approve thêm mạng chainId 12345
+# Bấm "Kết nối MetaMask" rồi Approve thêm mạng chainId 12345
 ```
 
 Hoặc thêm mạng thủ công:

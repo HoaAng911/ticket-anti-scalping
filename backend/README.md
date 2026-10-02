@@ -42,9 +42,9 @@ Response: `{ "success": true, "data": ... }` hoặc `{ "success": false, "error"
 
 `blockchainListener.js` đồng bộ:
 
-- `TicketMinted` → Ticket `owned` + Transaction `mint`
-- `TicketListed` → status `listed_for_resale`
-- `TicketSold` → đổi `ownerWallet`, Transaction `resale`
+- `TicketMinted` rồi Ticket `owned` + Transaction `mint`
+- `TicketListed` rồi status `listed_for_resale`
+- `TicketSold` rồi đổi `ownerWallet`, Transaction `resale`
 
 ## Cài đặt
 

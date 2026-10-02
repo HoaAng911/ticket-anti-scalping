@@ -132,11 +132,34 @@ function copyAbi(name) {
   }
 }
 
+function upsertEnvFile(filePath, updates, defaults = "") {
+  let content = fs.existsSync(filePath) ? fs.readFileSync(filePath, "utf8") : defaults;
+  if (!content.trim()) content = defaults;
+  for (const [key, value] of Object.entries(updates)) {
+    const line = `${key}=${value}`;
+    const re = new RegExp(`^${key}=.*$`, "m");
+    if (re.test(content)) {
+      content = content.replace(re, line);
+    } else {
+      content = content.trimEnd() + `\n${line}\n`;
+    }
+  }
+  fs.writeFileSync(filePath, content.endsWith("\n") ? content : content + "\n");
+}
+
 function writeEnvHints(ticketAddress, marketAddress) {
   const backendEnv = path.join(__dirname, "..", "..", "backend", ".env");
   const frontendEnv = path.join(__dirname, "..", "..", "frontend", ".env");
 
-  const backend = `PORT=5001
+  upsertEnvFile(
+    backendEnv,
+    {
+      TICKET_CONTRACT_ADDRESS: ticketAddress,
+      MARKETPLACE_CONTRACT_ADDRESS: marketAddress,
+      CHAIN_ID: "12345",
+      RPC_URL: "http://127.0.0.1:8545",
+    },
+    `PORT=5001
 NODE_ENV=development
 MONGODB_URI=mongodb://127.0.0.1:27017/ticket-anti-scalping
 JWT_SECRET=ticket-dev-secret-change-me
@@ -146,20 +169,29 @@ CHAIN_ID=12345
 RPC_URL=http://127.0.0.1:8545
 TICKET_CONTRACT_ADDRESS=${ticketAddress}
 MARKETPLACE_CONTRACT_ADDRESS=${marketAddress}
+DEPLOYER_ADDRESS=0xdecc0bf86a34de96B161b1F910ce2684d36bb4B4
 CLIENT_ORIGIN=http://localhost:5173
-`;
+`
+  );
 
-  const frontend = `VITE_API_BASE_URL=/api
+  upsertEnvFile(
+    frontendEnv,
+    {
+      VITE_TICKET_CONTRACT_ADDRESS: ticketAddress,
+      VITE_MARKETPLACE_CONTRACT_ADDRESS: marketAddress,
+      VITE_CHAIN_ID: "12345",
+      VITE_RPC_URL: "http://127.0.0.1:8545",
+    },
+    `VITE_API_BASE_URL=/api
 VITE_NETWORK_NAME=Ticket Private Clique
 VITE_CHAIN_ID=12345
 VITE_RPC_URL=http://127.0.0.1:8545
 VITE_TICKET_CONTRACT_ADDRESS=${ticketAddress}
 VITE_MARKETPLACE_CONTRACT_ADDRESS=${marketAddress}
-`;
+`
+  );
 
-  fs.writeFileSync(backendEnv, backend);
-  fs.writeFileSync(frontendEnv, frontend);
-  console.log("Wrote backend/.env and frontend/.env");
+  console.log("Updated contract addresses in backend/.env and frontend/.env");
 }
 
 main().catch((err) => {

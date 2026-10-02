@@ -23,7 +23,7 @@ Admin lab:
 
 Chuỗi TicketBlock (mỗi lần mint):
 
-- `prevBlockHash` ← hash block vé trước (`0x0` nếu là vé đầu)
+- `prevBlockHash` lấy từ hash block vé trước (`0x0` nếu là vé đầu)
 - `blockHash = keccak256(index, tokenId, eventChainId, owner, price, mintedAt, prevBlockHash)`
 - Event `TicketBlockCreated` + `verifyChain(from, to)`
 
@@ -50,7 +50,7 @@ Script sẽ:
 
 - Deploy 2 contract
 - `configureEvent(1=Standard 0.01 ETH, 2=VIP 0.05 ETH)`
-- Copy ABI → `backend/src/abi/` và `frontend/src/services/abi/`
+- Copy ABI sang `backend/src/abi/` và `frontend/src/services/abi/`
 - Ghi `deployments/localhost.json` + cập nhật `.env` backend/frontend
 
 Tuỳ chọn: đặt `DEPLOYER_PRIVATE_KEY` trong `.env` nếu muốn ký bằng key thay vì unlock geth.

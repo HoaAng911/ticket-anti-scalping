@@ -19,7 +19,7 @@ const userSchema = new mongoose.Schema(
       enum: ["user", "organizer", "admin"],
       default: "user",
     },
-    /** Nếu rỗng → dùng quyền mặc định theo role */
+    /** Nếu rỗng rồi dùng quyền mặc định theo role */
     permissions: {
       type: [String],
       default: [],

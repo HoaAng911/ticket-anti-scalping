@@ -100,7 +100,7 @@ async function onTicketBlockCreated(index, tokenId, prevBlockHash, blockHash, ow
   );
   console.log(
     `[listener] TicketBlock #${index} token=#${tokenIdN} ` +
-      `prev=${String(prevBlockHash).slice(0, 10)}… → ${String(blockHash).slice(0, 10)}…`
+      `prev=${String(prevBlockHash).slice(0, 10)}… sang ${String(blockHash).slice(0, 10)}…`
   );
 }
 
@@ -113,9 +113,53 @@ async function onTicketListed(tokenId, seller, price) {
       status: "listed_for_resale",
       ownerWallet: seller.toLowerCase(),
       listingPrice: priceEth,
+      listingPriceWei: price.toString(),
     }
   );
   console.log(`[listener] Listed token #${tokenIdN} @ ${priceEth} ETH`);
+}
+
+async function onListingCancelled(tokenId, seller) {
+  const tokenIdN = Number(tokenId);
+  await Ticket.findOneAndUpdate(
+    { tokenId: tokenIdN },
+    {
+      status: "owned",
+      ownerWallet: seller.toLowerCase(),
+      listingPrice: null,
+      listingPriceWei: null,
+    }
+  );
+  console.log(`[listener] Cancelled listing token #${tokenIdN}`);
+}
+
+async function onTicketTransfer(from, to, tokenId) {
+  const tokenIdN = Number(tokenId);
+  const fromAddr = String(from).toLowerCase();
+  const toAddr = String(to).toLowerCase();
+  const zero = "0x0000000000000000000000000000000000000000";
+  if (fromAddr === zero) return; // mint — handled by TicketMinted
+
+  let marketAddr = "";
+  try {
+    marketAddr = (process.env.MARKETPLACE_CONTRACT_ADDRESS || "").toLowerCase();
+  } catch {
+    /* ignore */
+  }
+
+  // Marketplace escrow / sale / cancel — handled by market events
+  if (marketAddr && (toAddr === marketAddr || fromAddr === marketAddr)) return;
+
+  await Ticket.findOneAndUpdate(
+    { tokenId: tokenIdN },
+    {
+      ownerWallet: toAddr,
+      status: "owned",
+      listingPrice: null,
+      listingPriceWei: null,
+    }
+  );
+  console.log(`[listener] Transfer token #${tokenIdN} ${fromAddr.slice(0, 10)}… sang ${toAddr.slice(0, 10)}…`);
 }
 
 async function onTicketSold(tokenId, seller, buyer, price, royalty, event) {
@@ -134,6 +178,7 @@ async function onTicketSold(tokenId, seller, buyer, price, royalty, event) {
       ownerWallet: buyerWallet,
       status: "owned",
       listingPrice: null,
+      listingPriceWei: null,
     }
   );
 
@@ -176,13 +221,23 @@ export async function startBlockchainListener() {
       onTicketListed(args[0], args[1], args[2]).catch(console.error);
     });
 
+    market.on("ListingCancelled", (...args) => {
+      onListingCancelled(args[0], args[1]).catch(console.error);
+    });
+
     market.on("TicketSold", (...args) => {
       const event = args[args.length - 1];
       onTicketSold(args[0], args[1], args[2], args[3], args[4], event).catch(console.error);
     });
 
+    ticket.on("Transfer", (...args) => {
+      onTicketTransfer(args[0], args[1], args[2]).catch(console.error);
+    });
+
     started = true;
-    console.log("[listener] TicketMinted / TicketBlockCreated / TicketListed / TicketSold");
+    console.log(
+      "[listener] TicketMinted / TicketBlockCreated / Transfer / TicketListed / ListingCancelled / TicketSold"
+    );
 
     const provider = ticket.runner?.provider;
     if (provider) {
@@ -213,6 +268,10 @@ export async function startBlockchainListener() {
       for (const ev of listed) {
         await onTicketListed(ev.args.tokenId, ev.args.seller, ev.args.price);
       }
+      const cancelled = await market.queryFilter(market.filters.ListingCancelled(), from, latest);
+      for (const ev of cancelled) {
+        await onListingCancelled(ev.args.tokenId, ev.args.seller);
+      }
       const sold = await market.queryFilter(market.filters.TicketSold(), from, latest);
       for (const ev of sold) {
         await onTicketSold(
@@ -224,7 +283,12 @@ export async function startBlockchainListener() {
           ev
         );
       }
-      console.log(`[listener] Backfill xong từ block ${from} → ${latest}`);
+      // Heal ownership from Transfer after market events (last write wins for OTC transfers)
+      const transfers = await ticket.queryFilter(ticket.filters.Transfer(), from, latest);
+      for (const ev of transfers) {
+        await onTicketTransfer(ev.args.from, ev.args.to, ev.args.tokenId);
+      }
+      console.log(`[listener] Backfill xong từ block ${from} đến ${latest}`);
     }
   } catch (err) {
     console.error("[listener] Không start được:", err.message);

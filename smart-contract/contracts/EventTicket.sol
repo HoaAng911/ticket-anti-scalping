@@ -7,7 +7,7 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 
 /**
  * @title EventTicket
- * @notice NFT vé sự kiện (ERC-721) + chuỗi TicketBlock liên kết hash (prev → current).
+ * @notice NFT vé sự kiện (ERC-721) + chuỗi TicketBlock liên kết hash (prev nối sang current).
  *         Mỗi lần mint tạo một "block" mới, hash gắn với block trước — giống linked list on-chain.
  */
 contract EventTicket is ERC721, Ownable, ReentrancyGuard {
@@ -55,7 +55,16 @@ contract EventTicket is ERC721, Ownable, ReentrancyGuard {
     bytes32 public latestBlockHash;
     uint256 public latestBlockIndex;
 
+    /// @dev Index sở hữu on-chain (đọc từ sổ cái, không cần Mongo)
+    mapping(address => uint256[]) private _ownedTokens;
+    mapping(uint256 => uint256) private _ownedTokensIndex; // tokenId => index trong mảng owner
+
     address public organizerTreasury;
+
+    /// @notice Tổng ETH đã chuyển về treasury từ bán sơ cấp (on-chain, ai cũng đọc được)
+    uint256 public totalPrimaryRevenue;
+    /// @notice Doanh thu sơ cấp theo từng eventChainId
+    mapping(uint256 => uint256) public primaryRevenueByEvent;
 
     event EventConfigured(
         uint256 indexed eventChainId,
@@ -68,6 +77,17 @@ contract EventTicket is ERC721, Ownable, ReentrancyGuard {
         address indexed owner,
         uint256 eventChainId,
         uint256 price
+    );
+    /**
+     * @notice Dòng tiền sơ cấp trên sổ cái: buyer sang organizerTreasury.
+     *         Ai cũng có thể lọc event này để kiểm toán minh bạch.
+     */
+    event PaymentToOrganizer(
+        uint256 indexed tokenId,
+        address indexed buyer,
+        address indexed treasury,
+        uint256 eventChainId,
+        uint256 amountWei
     );
     event TicketBlockCreated(
         uint256 indexed index,
@@ -175,12 +195,20 @@ contract EventTicket is ERC721, Ownable, ReentrancyGuard {
 
         tokenId = _issueTicket(msg.sender, eventChainId, cfg.priceWei, true);
 
-        (bool ok, ) = organizerTreasury.call{value: msg.value}("");
+        address treasury = organizerTreasury;
+        (bool ok, ) = treasury.call{value: msg.value}("");
         require(ok, "treasury transfer failed");
+
+        totalPrimaryRevenue += msg.value;
+        primaryRevenueByEvent[eventChainId] += msg.value;
+
+        emit PaymentToOrganizer(tokenId, msg.sender, treasury, eventChainId, msg.value);
     }
 
     /**
-     * @dev Mint NFT + append TicketBlock liên kết prevBlockHash → blockHash mới.
+     * @dev Mint NFT + append TicketBlock liên kết prevBlockHash nối sang blockHash mới.
+     *      enforceWalletLimit=true: đếm vào hạn mức 2 vé/ví (mint sơ cấp).
+     *      enforceWalletLimit=false: admin mint — không tính vào hạn mức user.
      */
     function _issueTicket(
         address to,
@@ -188,10 +216,6 @@ contract EventTicket is ERC721, Ownable, ReentrancyGuard {
         uint256 priceWei,
         bool enforceWalletLimit
     ) internal returns (uint256 tokenId) {
-        if (enforceWalletLimit) {
-            // đã check ở mintTicket; giữ tham số cho rõ ngữ cảnh
-        }
-
         tokenId = _nextTokenId++;
         uint256 mintedAt = block.timestamp;
 
@@ -200,7 +224,9 @@ contract EventTicket is ERC721, Ownable, ReentrancyGuard {
             price: priceWei,
             mintedAt: mintedAt
         });
-        ticketsPerWalletPerEvent[eventChainId][to] += 1;
+        if (enforceWalletLimit) {
+            ticketsPerWalletPerEvent[eventChainId][to] += 1;
+        }
         soldCount[eventChainId] += 1;
 
         _safeMint(to, tokenId);
@@ -308,5 +334,48 @@ contract EventTicket is ERC721, Ownable, ReentrancyGuard {
 
     function totalMinted() external view returns (uint256) {
         return _nextTokenId - 1;
+    }
+
+    /**
+     * @notice Danh sách tokenId đang sở hữu bởi `owner` — nguồn từ ledger on-chain.
+     */
+    function tokensOfOwner(address owner) external view returns (uint256[] memory) {
+        return _ownedTokens[owner];
+    }
+
+    function balanceOfOwnerIndexed(address owner) external view returns (uint256) {
+        return _ownedTokens[owner].length;
+    }
+
+    /**
+     * @dev Cập nhật index sở hữu khi mint / transfer / burn (ERC-721 OZ v5).
+     */
+    function _update(address to, uint256 tokenId, address auth) internal override returns (address) {
+        address from = _ownerOf(tokenId);
+        if (from != address(0)) {
+            _removeTokenFromOwnerEnumeration(from, tokenId);
+        }
+        address previous = super._update(to, tokenId, auth);
+        if (to != address(0)) {
+            _addTokenToOwnerEnumeration(to, tokenId);
+        }
+        return previous;
+    }
+
+    function _addTokenToOwnerEnumeration(address to, uint256 tokenId) private {
+        _ownedTokensIndex[tokenId] = _ownedTokens[to].length;
+        _ownedTokens[to].push(tokenId);
+    }
+
+    function _removeTokenFromOwnerEnumeration(address from, uint256 tokenId) private {
+        uint256 lastIndex = _ownedTokens[from].length - 1;
+        uint256 tokenIndex = _ownedTokensIndex[tokenId];
+        if (tokenIndex != lastIndex) {
+            uint256 lastTokenId = _ownedTokens[from][lastIndex];
+            _ownedTokens[from][tokenIndex] = lastTokenId;
+            _ownedTokensIndex[lastTokenId] = tokenIndex;
+        }
+        _ownedTokens[from].pop();
+        delete _ownedTokensIndex[tokenId];
     }
 }

@@ -36,24 +36,8 @@ export function WalletProvider({ children }) {
     };
   }, [refresh]);
 
-  const connect = useCallback(async () => {
-    setError(null);
-    setConnecting(true);
-    try {
-      if (!window.ethereum) throw new Error("Chưa cài MetaMask");
-      const provider = new BrowserProvider(window.ethereum);
-      await provider.send("eth_requestAccounts", []);
-      await ensureNetwork();
-      await refresh();
-    } catch (err) {
-      setError(err.message || String(err));
-    } finally {
-      setConnecting(false);
-    }
-  }, [refresh]);
-
   const ensureNetwork = useCallback(async () => {
-    if (!window.ethereum) return;
+    if (!window.ethereum) throw new Error("Chưa cài MetaMask");
     try {
       await window.ethereum.request({
         method: "wallet_switchEthereumChain",
@@ -76,9 +60,36 @@ export function WalletProvider({ children }) {
         throw err;
       }
     }
+    const provider = new BrowserProvider(window.ethereum);
+    const network = await provider.getNetwork();
+    const id = Number(network.chainId);
+    setChainId(id);
+    if (id !== TARGET_CHAIN_ID) {
+      throw new Error(`Không chuyển được sang mạng ${NETWORK_NAME} (chainId ${TARGET_CHAIN_ID}).`);
+    }
   }, []);
 
+  const connect = useCallback(async () => {
+    setError(null);
+    setConnecting(true);
+    try {
+      if (!window.ethereum) throw new Error("Chưa cài MetaMask");
+      const provider = new BrowserProvider(window.ethereum);
+      await provider.send("eth_requestAccounts", []);
+      await ensureNetwork();
+      await refresh();
+    } catch (err) {
+      const message = err.message || String(err);
+      setError(message);
+      throw err;
+    } finally {
+      setConnecting(false);
+    }
+  }, [refresh, ensureNetwork]);
+
+  /** true khi đã biết chain và sai mạng; null = chưa sẵn sàng */
   const wrongNetwork = chainId != null && chainId !== TARGET_CHAIN_ID;
+  const networkReady = chainId === TARGET_CHAIN_ID;
 
   const value = useMemo(
     () => ({
@@ -87,13 +98,14 @@ export function WalletProvider({ children }) {
       connecting,
       error,
       wrongNetwork,
+      networkReady,
       targetChainId: TARGET_CHAIN_ID,
       networkName: NETWORK_NAME,
       connect,
       ensureNetwork,
       refresh,
     }),
-    [account, chainId, connecting, error, wrongNetwork, connect, ensureNetwork, refresh]
+    [account, chainId, connecting, error, wrongNetwork, networkReady, connect, ensureNetwork, refresh]
   );
 
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;

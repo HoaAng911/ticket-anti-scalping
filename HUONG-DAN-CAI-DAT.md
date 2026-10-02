@@ -25,13 +25,16 @@ Thứ tự bắt buộc:
 Luồng dữ liệu ngắn:
 
 ```
-MetaMask / Hardhat  →  geth :8545  ←  EventTicket / Marketplace
-                              ↑
-                         backend listener + admin signer
-                              ↑
-                         frontend (Vite) → proxy /api → backend :5001
-                              ↑
-                           MongoDB
+MetaMask / Hardhat gửi giao dịch lên geth :8545
+        |
+        v
+EventTicket / Marketplace (on-chain)
+        ^
+        |  backend listener + admin signer đọc/ghi
+frontend (Vite) gọi proxy /api sang backend :5001
+        |
+        v
+     MongoDB (cache / auth / metadata)
 ```
 
 ---
@@ -347,7 +350,7 @@ Sau `deploy.js`, các biến contract thường đã được ghi sẵn. Kiểm 
 
 | Biến | Giá trị lab |
 |------|-------------|
-| `VITE_API_BASE_URL` | `/api` (Vite proxy → backend `:5001`) |
+| `VITE_API_BASE_URL` | `/api` (Vite proxy rồi backend `:5001`) |
 | `VITE_CHAIN_ID` | `12345` |
 | `VITE_RPC_URL` | `http://127.0.0.1:8545` |
 | `VITE_NETWORK_NAME` | `Ticket Private Clique` |
@@ -358,7 +361,7 @@ Sau `deploy.js`, các biến contract thường đã được ghi sẵn. Kiểm 
 `vite.config.js` proxy:
 
 ```
-/api  →  http://localhost:5001
+/api  rồi  http://localhost:5001
 ```
 
 ### 6.2. Chạy dev server
@@ -416,7 +419,7 @@ cd blockchain/private-net
 
 ### 7.2. Import tài khoản deployer (lab)
 
-1. MetaMask → Import account  
+1. MetaMask rồi Import account  
 2. Dùng keystore trong `blockchain/private-net/node1/keystore/` **hoặc** private key lab (nếu nhóm đã xuất)  
 3. Mật khẩu keystore: `ticket123` (file `password.txt`)
 
@@ -439,12 +442,12 @@ Thực hiện lần lượt:
 2. `curl http://127.0.0.1:5001/api/health` — backend OK, có địa chỉ contract  
 3. Mở `http://localhost:5173` — thấy sự kiện mẫu  
 4. Đăng nhập `/admin` bằng `admin@ticket.local` / `admin123`  
-5. Tab **Cấp ETH / Ví** → tạo 1–2 ví lab  
-6. Tab **Mint vé** → mint `eventChainId = 1` cho các ví đó  
-7. Tab **Chuỗi block vé** → thấy tip tăng, `verifyChain` hợp lệ  
-8. Tab **Người dùng & quyền** → tạo user / đổi role  
-9. Import ví lab vào MetaMask → `/my-tickets` thấy NFT  
-10. Sau thời gian khóa (**60 giây** trên local) → đăng bán resale ≤ 110% giá gốc  
+5. Tab **Cấp ETH / Ví** rồi tạo 1–2 ví lab  
+6. Tab **Mint vé** rồi mint `eventChainId = 1` cho các ví đó  
+7. Tab **Chuỗi block vé** rồi thấy tip tăng, `verifyChain` hợp lệ  
+8. Tab **Người dùng & quyền** rồi tạo user / đổi role  
+9. Import ví lab vào MetaMask rồi `/my-tickets` thấy NFT  
+10. Sau thời gian khóa (**60 giây** trên local) rồi đăng bán resale ≤ 110% giá gốc  
 
 ---
 
@@ -473,7 +476,7 @@ Catalog quyền: `backend/src/constants/permissions.js`.
 | Trần giá resale | **110%** giá gốc |
 | Khóa chuyển nhượng sau mint | **60s** (local/geth), 24h (Sepolia) |
 | Royalty resale | **5%** về treasury organizer |
-| TicketBlock | Mỗi mint nối `prevBlockHash` → `blockHash` |
+| TicketBlock | Mỗi mint nối `prevBlockHash` rồi `blockHash` |
 
 
 `adminMint` / `adminMintBatch` (chỉ admin backend) bỏ qua giới hạn 2 vé/ví — dùng cho lab / cấp vé.

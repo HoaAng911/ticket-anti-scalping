@@ -108,7 +108,7 @@ Buổi 3 là 1 lý thuyết + 2 thực hành: ít mục hơn nhưng mỗi mục 
 
 **Terminal mở ở đâu?**
 
-Windows: Start → gõ “PowerShell”. macOS: Cmd+Space → “Terminal”. Linux: Ctrl+Alt+T.
+Windows: Start, gõ “PowerShell”. macOS: Cmd+Space, gõ “Terminal”. Linux: Ctrl+Alt+T.
 
 **Dấu # là chú thích**
 
@@ -229,12 +229,12 @@ Hiểu bằng cách so với thứ bạn dùng hằng ngày: trình duyệt web
 
 **Mục 1**
 
-| Trong đời thường | → | Trong blockchain |
+| Trong đời thường | tương ứng | Trong blockchain |
 | --- | --- | --- |
-| Muốn xem web bạn cần cài trình duyệt Chrome | → | Muốn tham gia mạng Ethereum bạn cần cài phần mềm node. geth là một trong số đó |
-| Chrome tải trang web về và hiển thị cho bạn | → | geth tải các block về, kiểm tra tính hợp lệ và lưu lại trên máy bạn |
-| Ngoài Chrome còn có Firefox, Safari | → | Ngoài geth còn có Nethermind, Besu, Erigon — khác ngôn ngữ nhưng cùng chuẩn |
-| Chrome mở cổng để các trang web gọi tới | → | geth mở cổng 8545 để MetaMask, Hardhat hay chương trình của bạn gọi vào |
+| Muốn xem web bạn cần cài trình duyệt Chrome | tương ứng | Muốn tham gia mạng Ethereum bạn cần cài phần mềm node. geth là một trong số đó |
+| Chrome tải trang web về và hiển thị cho bạn | tương ứng | geth tải các block về, kiểm tra tính hợp lệ và lưu lại trên máy bạn |
+| Ngoài Chrome còn có Firefox, Safari | tương ứng | Ngoài geth còn có Nethermind, Besu, Erigon — khác ngôn ngữ nhưng cùng chuẩn |
+| Chrome mở cổng để các trang web gọi tới | tương ứng | geth mở cổng 8545 để MetaMask, Hardhat hay chương trình của bạn gọi vào |
 
 📦  geth viết bằng ngôn ngữ Go, do Ethereum Foundation phát triển, mã nguồn mở và miễn phí. Cổng 8545 ở dòng cuối là thứ buổi 3 sẽ dùng để cắm MetaMask và Hardhat vào.
 
@@ -402,7 +402,7 @@ Mục tiêu của bước cài đặt: gõ geth ở BẤT KỲ thư mục nào c
 
 **⚠  Windows: cài xong vẫn command not found**  bạn chưa đóng hẳn PowerShell. Biến PATH chỉ được nạp khi mở cửa sổ mới.
 
-**⚠  macOS: “geth cannot be opened because the developer cannot be verified”**  chạy dòng xattr ở trên, hoặc System Settings → Privacy & Security → Allow Anyway.
+**⚠  macOS: “geth cannot be opened because the developer cannot be verified”**  chạy dòng xattr ở trên, hoặc System Settings rồi Privacy & Security, chọn Allow Anyway.
 
 **⚠  Không có quyền sudo (máy phòng máy)**  giải nén vào thư mục của bạn rồi thêm thư mục đó vào PATH thay vì chép vào /usr/local/bin.
 
@@ -1413,12 +1413,12 @@ Ví von số điện thoại rất hiệu quả, chỉ rõ ba phần của chu�
 
 **Mục 1**
 
-| Trong đời thường | → | Trong blockchain |
+| Trong đời thường | tương ứng | Trong blockchain |
 | --- | --- | --- |
-| Muốn gọi cho ai, bạn cần số điện thoại của họ | → | Muốn nối tới một node, bạn cần chuỗi enode của node đó |
-| Số điện thoại là duy nhất cho mỗi người | → | Mỗi node có một enode duy nhất, sinh từ khoá của node |
-| Số gồm mã vùng và số thuê bao | → | enode gồm: định danh node + địa chỉ IP + cổng |
-| Bạn lưu số vào danh bạ để lần sau khỏi nhập | → | Bạn ghi enode vào static-nodes.json để tự nối lại |
+| Muốn gọi cho ai, bạn cần số điện thoại của họ | tương ứng | Muốn nối tới một node, bạn cần chuỗi enode của node đó |
+| Số điện thoại là duy nhất cho mỗi người | tương ứng | Mỗi node có một enode duy nhất, sinh từ khoá của node |
+| Số gồm mã vùng và số thuê bao | tương ứng | enode gồm: định danh node + địa chỉ IP + cổng |
+| Bạn lưu số vào danh bạ để lần sau khỏi nhập | tương ứng | Bạn ghi enode vào static-nodes.json để tự nối lại |
 
 Cấu trúc một chuỗi enode
 
@@ -1705,7 +1705,7 @@ Ví này sẽ nhận tiền từ node 1 ở bước tiếp theo
 
 **4**
 
-**Bấm biểu tượng tài khoản → Add account → Add a new account**
+**Bấm biểu tượng tài khoản, Add account, Add a new account**
 
 Đặt tên là “Vi hoc tap” cho dễ nhớ.
 
@@ -1787,7 +1787,7 @@ Số dư chuyển từ 0 thành 50 ETH.
 
 ### **Chưa thấy? Làm mới ví**
 
-Ba chấm → Settings → Advanced → Clear activity tab data.
+Ba chấm rồi Settings, Advanced, Clear activity tab data.
 
 ### **Nhìn cửa sổ node 1 lúc gửi**
 
@@ -1815,7 +1815,7 @@ MetaMask dùng khoá riêng để ký. Khoá không rời khỏi máy bạn.
 
 ### **Điều vừa xảy ra, tóm tắt**
 
-Giao dịch được ký bằng khoá riêng → đưa vào phòng chờ (mempool) → node 1 gói nó vào block tiếp theo → số dư hai ví được cập nhật → MetaMask đọc số dư mới từ node và hiển thị. Kiểm chứng ở node 1: eth.getBalance("&lt;DIA_CHI_NODE2&gt;").
+Giao dịch được ký bằng khoá riêng, rồi đưa vào phòng chờ (mempool); node 1 gói nó vào block tiếp theo; số dư hai ví được cập nhật; MetaMask đọc số dư mới từ node và hiển thị. Kiểm chứng ở node 1: eth.getBalance("&lt;DIA_CHI_NODE2&gt;").
 
 <small><span class="docvortex-page-footnote" data-block-type="page_footnote" style="color:#6b7280">Nếu chưa thấy tiền, bảo sinh viên chờ 5–10 giây rồi tải lại. Thời lượng: 10 phút.</span></small>
 
@@ -2114,7 +2114,7 @@ ban co muon tra it hon
 | insufficient funds | Không đủ tiền trả cả tiền gửi lẫn phí gas | Giảm số tiền gửi hoặc nạp thêm từ ví node 1 |
 | max fee per gas less than block base fee | Vi phạm điều kiện 7: phí trần thấp hơn phí sàn của block | Trong MetaMask chọn mức phí cao hơn, hoặc bỏ tham số phí để ví tự tính |
 | intrinsic gas too low | Cho phép quá ít gas | Đặt gas ít nhất 21000, hoặc bỏ tham số gas để tự tính |
-| nonce too low | Nonce đã dùng cho giao dịch trước rồi | MetaMask: Settings → Advanced → Clear activity tab data |
+| nonce too low | Nonce đã dùng cho giao dịch trước rồi | MetaMask: Settings, Advanced, Clear activity tab data |
 | replacement transaction underpriced | Muốn thay giao dịch cũ nhưng phí chưa cao hơn | Tăng phí gas thêm ít nhất 10% |
 | authentication needed | Ví trong geth chưa được mở khoá | Khởi động node kèm --unlock và --password |
 | invalid sender / invalid chain id | Ký cho mạng khác hoặc sai chainId | Kiểm tra Chain ID trong MetaMask đúng 12345 chưa |

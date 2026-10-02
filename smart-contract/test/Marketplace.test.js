@@ -54,12 +54,58 @@ describe("Marketplace", function () {
     await market.connect(seller).listTicket(1, listPrice);
 
     const treasuryBefore = await ethers.provider.getBalance(owner.address);
+    const royalty = (listPrice * 5n) / 100n;
+    const sellerProceeds = listPrice - royalty;
+
     await expect(market.connect(buyer).buyResaleTicket(1, { value: listPrice }))
-      .to.emit(market, "TicketSold");
+      .to.emit(market, "TicketSold")
+      .and.to.emit(market, "PaymentSplit")
+      .withArgs(1, buyer.address, seller.address, owner.address, sellerProceeds, royalty);
 
     expect(await ticket.ownerOf(1)).to.equal(buyer.address);
-    const royalty = (listPrice * 5n) / 100n;
     const treasuryAfter = await ethers.provider.getBalance(owner.address);
     expect(treasuryAfter - treasuryBefore).to.equal(royalty);
+    expect(await market.totalRoyaltyPaid()).to.equal(royalty);
+    expect(await market.totalResaleVolume()).to.equal(listPrice);
+  });
+
+  it("rejects seller buying own listing", async function () {
+    const { ticket, market, seller } = await deploy(1);
+    const price = ethers.parseEther("0.01");
+    await ticket.connect(seller).mintTicket(1, price, { value: price });
+    await time.increase(2);
+    await ticket.connect(seller).approve(await market.getAddress(), 1);
+    const listPrice = ethers.parseEther("0.011");
+    await market.connect(seller).listTicket(1, listPrice);
+    await expect(
+      market.connect(seller).buyResaleTicket(1, { value: listPrice })
+    ).to.be.revertedWithCustomError(market, "CannotBuyOwnListing");
+  });
+
+  it("cancel listing returns NFT to seller", async function () {
+    const { ticket, market, seller } = await deploy(1);
+    const price = ethers.parseEther("0.01");
+    await ticket.connect(seller).mintTicket(1, price, { value: price });
+    await time.increase(2);
+    await ticket.connect(seller).approve(await market.getAddress(), 1);
+    await market.connect(seller).listTicket(1, ethers.parseEther("0.011"));
+    expect(await market.activeListingCount()).to.equal(1n);
+    await expect(market.connect(seller).cancelListing(1)).to.emit(market, "ListingCancelled");
+    expect(await ticket.ownerOf(1)).to.equal(seller.address);
+    expect(await market.activeListingCount()).to.equal(0n);
+  });
+
+  it("exposes active token ids on the ledger", async function () {
+    const { ticket, market, seller, buyer } = await deploy(1);
+    const price = ethers.parseEther("0.01");
+    await ticket.connect(seller).mintTicket(1, price, { value: price });
+    await ticket.connect(buyer).mintTicket(1, price, { value: price });
+    await time.increase(2);
+    await ticket.connect(seller).approve(await market.getAddress(), 1);
+    await ticket.connect(buyer).approve(await market.getAddress(), 2);
+    await market.connect(seller).listTicket(1, ethers.parseEther("0.011"));
+    await market.connect(buyer).listTicket(2, ethers.parseEther("0.011"));
+    const ids = await market.getActiveTokenIds();
+    expect(ids.map((x) => Number(x)).sort()).to.deep.equal([1, 2]);
   });
 });

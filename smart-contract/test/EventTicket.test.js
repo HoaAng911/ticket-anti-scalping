@@ -25,6 +25,21 @@ describe("EventTicket", function () {
     expect(await ticket.getRemainingTickets(1)).to.equal(9n);
   });
 
+  it("pays organizerTreasury and records PaymentToOrganizer on ledger", async function () {
+    const { ticket, owner, buyer } = await deploy();
+    const price = ethers.parseEther("0.01");
+    const before = await ethers.provider.getBalance(owner.address);
+
+    await expect(ticket.connect(buyer).mintTicket(1, price, { value: price }))
+      .to.emit(ticket, "PaymentToOrganizer")
+      .withArgs(1, buyer.address, owner.address, 1, price);
+
+    const after = await ethers.provider.getBalance(owner.address);
+    expect(after - before).to.equal(price);
+    expect(await ticket.totalPrimaryRevenue()).to.equal(price);
+    expect(await ticket.primaryRevenueByEvent(1)).to.equal(price);
+  });
+
   it("links each new ticket block to the previous block hash", async function () {
     const { ticket, buyer, other } = await deploy();
     const price = ethers.parseEther("0.01");
@@ -93,6 +108,30 @@ describe("EventTicket", function () {
     expect(tip.index).to.equal(2n);
     expect(tip.blockHash).to.equal(b2.blockHash);
     expect(tip.tokenId).to.equal(2n);
+  });
+
+  it("admin mint does not consume user MAX_TICKETS_PER_WALLET quota", async function () {
+    const { ticket, owner, buyer } = await deploy();
+    await ticket.connect(owner).adminMint(buyer.address, 1);
+    await ticket.connect(owner).adminMint(buyer.address, 1);
+    expect(await ticket.ticketsPerWalletPerEvent(1, buyer.address)).to.equal(0n);
+    const price = ethers.parseEther("0.01");
+    await ticket.connect(buyer).mintTicket(1, price, { value: price });
+    await ticket.connect(buyer).mintTicket(1, price, { value: price });
+    expect(await ticket.ticketsPerWalletPerEvent(1, buyer.address)).to.equal(2n);
+    await expect(
+      ticket.connect(buyer).mintTicket(1, price, { value: price })
+    ).to.be.revertedWithCustomError(ticket, "TooManyTicketsPerWallet");
+  });
+
+  it("tokensOfOwner lists minted tickets for the wallet", async function () {
+    const { ticket, buyer, other } = await deploy();
+    const price = ethers.parseEther("0.01");
+    await ticket.connect(buyer).mintTicket(1, price, { value: price });
+    await ticket.connect(other).mintTicket(1, price, { value: price });
+    const mine = await ticket.tokensOfOwner(buyer.address);
+    expect(mine.length).to.equal(1);
+    expect(mine[0]).to.equal(1n);
   });
 
   it("new event type still appends to the same global TicketBlock chain", async function () {

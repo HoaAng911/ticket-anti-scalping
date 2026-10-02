@@ -47,7 +47,7 @@ ticket-anti-scalping/
 │   │   │   └── rateLimiter.js     # Chống bot lúc mở bán
 │   │   ├── services/
 │   │   │   ├── blockchainService.js    # Đọc contract (ethers.js)
-│   │   │   └── blockchainListener.js   # Listen event → đồng bộ DB
+│   │   │   └── blockchainListener.js   # Listen event để đồng bộ DB
 │   │   └── abi/
 │   │       ├── EventTicket.json    # ABI copy từ artifacts
 │   │       └── Marketplace.json
@@ -85,7 +85,7 @@ ticket-anti-scalping/
 │   │   ├── styles/
 │   │   └── utils/
 │   ├── index.html
-│   ├── vite.config.js             # Proxy /api → localhost:5000
+│   ├── vite.config.js             # Proxy /api sang localhost:5000
 │   ├── .env.example
 │   ├── package.json
 │   └── README.md
@@ -328,7 +328,7 @@ contract Marketplace {
 solidity: {
   version: "0.8.28",
   settings: {
-    evmVersion: "paris",  // BẮT BUỘC với Clique (không có shanghaiTime → PUSH0 invalid)
+    evmVersion: "paris",  // BẮT BUỘC với Clique (không có shanghaiTime khiến PUSH0 invalid)
   },
 },
 networks: {

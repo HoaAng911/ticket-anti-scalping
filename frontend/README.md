@@ -27,7 +27,7 @@ cp .env.example .env
 npm run dev   # http://localhost:5173
 ```
 
-Vite proxy `/api` → `http://localhost:5001`.
+Vite proxy `/api` sang `http://localhost:5001`.
 
 Hướng dẫn cài đặt full stack: [`../HUONG-DAN-CAI-DAT.md`](../HUONG-DAN-CAI-DAT.md).
 
@@ -36,4 +36,4 @@ Hướng dẫn cài đặt full stack: [`../HUONG-DAN-CAI-DAT.md`](../HUONG-DAN-
 1. Bật geth: `blockchain/private-net/scripts/start-all.sh`
 2. Backend + Mongo đang chạy, đã `npm run seed`
 3. Import keystore deployer vào MetaMask (xem `blockchain/private-net/HUONG-DAN.md`)
-4. Mở frontend → Kết nối MetaMask → mua vé → xem **Vé của tôi**
+4. Mở frontend, kết nối MetaMask, mua vé, xem **Vé của tôi**

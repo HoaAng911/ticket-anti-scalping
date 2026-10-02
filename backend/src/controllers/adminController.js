@@ -11,6 +11,7 @@ import {
   createRandomWallets,
   fundAddresses,
   getFunderBalance,
+  syncMongoEventsToChain,
 } from "../services/adminChainService.js";
 
 function parseAddressList(input) {
@@ -276,6 +277,16 @@ export const createTicketType = asyncHandler(async (req, res) => {
     });
   }
 
+  // Validate Mongo fields BEFORE any on-chain txs (tránh orphan configureEvent)
+  if (saveMongo !== false) {
+    if (!title || !description || !location || !startTime) {
+      return res.status(400).json({
+        success: false,
+        error: "Khi lưu Mongo cần title, description, location, startTime",
+      });
+    }
+  }
+
   const chainResults = [];
   for (const t of assigned) {
     const chain = await configureEventOnChain({
@@ -289,12 +300,6 @@ export const createTicketType = asyncHandler(async (req, res) => {
 
   let event = null;
   if (saveMongo !== false) {
-    if (!title || !description || !location || !startTime) {
-      return res.status(400).json({
-        success: false,
-        error: "Khi lưu Mongo cần title, description, location, startTime",
-      });
-    }
     event = await Event.create({
       title,
       description,
@@ -414,5 +419,11 @@ export const mintTicketsToWallets = asyncHandler(async (req, res) => {
   }
 
   const result = await adminMintTickets(addresses, eventChainId);
+  res.json({ success: true, data: result });
+});
+
+/** Đồng bộ mọi hạng vé Mongo rồi configureEvent on-chain (sau redeploy / lệch dữ liệu) */
+export const syncEventsToChain = asyncHandler(async (req, res) => {
+  const result = await syncMongoEventsToChain();
   res.json({ success: true, data: result });
 });

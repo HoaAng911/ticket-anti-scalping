@@ -3,8 +3,8 @@
   "chainId": "12345",
   "deployer": "0xdecc0bf86a34de96B161b1F910ce2684d36bb4B4",
   "transferLockSeconds": 60,
-  "EventTicket": "0x08f81Ae2C9816C62b9d05Abc7119eb24b7310E94",
-  "Marketplace": "0x41dd5F9078a8bD81B0d058A0ad120697F5CEd183",
+  "EventTicket": "0x83e94d633898cc3f31E89183E2aFC4e5c572F6b7",
+  "Marketplace": "0x6378075fAd0B4B65D8d77735828a6898589AD488",
   "sampleEvents": [
     {
       "eventChainId": 1,
@@ -19,5 +19,5 @@
       "totalSupply": 20
     }
   ],
-  "deployedAt": "2026-10-01T16:45:48.219Z"
+  "deployedAt": "2026-10-02T03:17:04.174Z"
 }
