@@ -381,23 +381,28 @@ Rồi:
 
 ## 10. Kết nối MetaMask
 
-1. Mở MetaMask -> Settings -> Networks -> Add network -> Add a network manually.
-2. Điền:
+**Hướng dẫn chuẩn theo dự án (chi tiết từng bước, khớp trang helper):** xem [`../README.md` mục 7–8](../README.md#7-kết-nối-metamask-chuẩn-theo-dự-án).
 
+Tóm tắt nhanh:
+
+```bash
+cd blockchain/private-net
+./scripts/start-all.sh
+./scripts/serve-metamask.sh
+# Mở http://127.0.0.1:8765/ → Kết nối MetaMask → Approve mạng Ticket Private Clique
+```
+
+Tham số (khớp `metamask/network-config.js`):
 
 | Trường          | Giá trị                 |
 | --------------- | ----------------------- |
 | Network name    | Ticket Private Clique   |
 | Default RPC URL | `http://127.0.0.1:8545` |
-| Chain ID        | `12345`                 |
+| Chain ID        | `12345` (`0x3039`)      |
 | Currency symbol | `ETH`                   |
 | Block explorer  | (để trống)              |
 
-
-1. Import tài khoản bằng keystore (mục 5) hoặc private key tương ứng.
-2. Đảm bảo đang chọn đúng mạng `Ticket Private Clique` trước khi gửi giao dịch.
-
-Node geth phải đang chạy thì MetaMask mới kết nối RPC được.
+Import tài khoản lab bằng keystore UTC trong `node1/keystore/` hoặc `node2/keystore/`, mật khẩu `password.txt` (`ticket123`). Node geth phải đang chạy thì MetaMask mới kết nối RPC được.
 
 ---
 

@@ -46,11 +46,17 @@ async function main() {
     "ETH"
   );
 
+  // Lab chỉ deploy local — khóa chuyển nhượng ngắn để demo dễ
   const isLocal =
     network.chainId === 12345n ||
     network.chainId === 31337n ||
     network.chainId === 31338n;
-  const transferLockSeconds = isLocal ? 60 : 24 * 60 * 60;
+  if (!isLocal) {
+    throw new Error(
+      `Chỉ hỗ trợ deploy local (chainId 12345 / 31337 / 31338). Nhận được: ${network.chainId}`
+    );
+  }
+  const transferLockSeconds = 60;
   const treasury = deployerAddress;
 
   const EventTicket = await hre.ethers.getContractFactory("EventTicket", deployer);

@@ -1,6 +1,7 @@
-# Smart Contract — Ticket Anti-Scalping
+# Smart Contract — Ticket Anti-Scalping (local lab)
 
-Solidity + Hardhat: `EventTicket` (ERC-721) và `Marketplace` (resale chống scalping).
+Solidity + Hardhat: `EventTicket` (ERC-721) và `Marketplace` (resale chống scalping).  
+**Chỉ chạy local** — geth private-net (`chainId 12345`) hoặc Hardhat node.
 
 ## Contracts
 
@@ -9,11 +10,11 @@ Solidity + Hardhat: `EventTicket` (ERC-721) và `Marketplace` (resale chống sc
 | `EventTicket.sol` | NFT vé, max 2 vé/ví/event, mint sơ cấp |
 | `Marketplace.sol` | Resale ≤ 110%, khóa chuyển nhượng, royalty 5% |
 
-Anti-scalping:
+Anti-scalping (giá trị lab):
 
 - `MAX_TICKETS_PER_WALLET = 2` (mint mua thường)
 - `MAX_RESALE_PERCENT = 110`
-- `TRANSFER_LOCK_SECONDS` — local/geth: **60s** (deploy), Sepolia: 24h
+- `TRANSFER_LOCK_SECONDS` — **60s** khi deploy local
 - `ROYALTY_PERCENT = 5`
 
 Admin lab:
@@ -40,10 +41,17 @@ OpenZeppelin **pin `5.0.2`** (bản mới hơn dùng opcode Cancun — không t�
 ## Deploy lên geth private-net (chainId 12345)
 
 1. Bật mạng: `cd ../blockchain/private-net && ./scripts/start-all.sh`
-2. Deploy (dùng tài khoản deployer đã unlock trên node1 — không bắt buộc export private key):
+2. Copy env (tuỳ chọn — lab có thể để trống):
 
 ```bash
-npx hardhat run scripts/deploy.js --network localhost
+cp .env.example .env
+```
+
+3. Deploy (tài khoản deployer unlock trên node1 — không bắt buộc private key):
+
+```bash
+npm run deploy:local
+# tương đương: npx hardhat run scripts/deploy.js --network localhost
 ```
 
 Script sẽ:
@@ -55,13 +63,12 @@ Script sẽ:
 
 Tuỳ chọn: đặt `DEPLOYER_PRIVATE_KEY` trong `.env` nếu muốn ký bằng key thay vì unlock geth.
 
-## Mạng
+## Mạng local
 
 | Mạng | URL | chainId |
 |------|-----|---------|
-| geth private-net | `http://127.0.0.1:8545` | `12345` |
-| Hardhat chain A | `:8547` | `31337` |
+| geth private-net (lab chính) | `http://127.0.0.1:8545` | `12345` |
+| Hardhat in-memory / chain A | `:8547` | `31337` |
 | Hardhat chain B | `:8548` | `31338` |
-| Sepolia | RPC env | `11155111` |
 
-Hướng dẫn cài đặt full stack: [`../HUONG-DAN-CAI-DAT.md`](../HUONG-DAN-CAI-DAT.md).
+Hướng dẫn full stack: [`../README.md`](../README.md).

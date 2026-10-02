@@ -2,11 +2,14 @@ require("@nomicfoundation/hardhat-toolbox");
 require("dotenv").config();
 
 /**
- * Cấu hình chính — dùng cho chuỗi nguồn (chain A).
+ * Cấu hình Hardhat — chỉ mạng local (lab).
+ *
+ * - hardhat: in-memory (test)
+ * - localhost: geth private-net :8545 (chainId 12345) — dùng chính
+ * - chainA / chainB: hardhat node local (bridge demo)
  *
  * LƯU Ý: chuỗi đích (chain B) phải dùng file riêng `hardhat.config.chainB.js`
- * vì chainId phải khác nhau, nếu không MetaMask không phân biệt được 2 mạng
- * và giao dịch ký cho chuỗi A có thể phát lại trên chuỗi B.
+ * vì chainId phải khác nhau.
  *
  * @type import('hardhat/config').HardhatUserConfig
  */
@@ -18,13 +21,11 @@ module.exports = {
     },
   },
   networks: {
-    // Mạng in-memory mặc định của hardhat (dùng khi chạy `npx hardhat test`)
     hardhat: {
       chainId: 31337,
     },
 
-    // ── Chuỗi A (nguồn) — chạy: npx hardhat node --port 8547 ──────────────
-    // Cổng 8547/8548 để không đụng mạng geth private-net (đang giữ 8545/8546)
+    // Chuỗi A — npx hardhat node --port 8547
     chainA: {
       url: "http://127.0.0.1:8547",
       chainId: 31337,
@@ -33,8 +34,7 @@ module.exports = {
         : [],
     },
 
-    // ── Chuỗi B (đích) — chạy: npx hardhat node --port 8548 --config hardhat.config.chainB.js
-    // Ở đây khai báo cho script deploy chạy đúng chainId khi deploy lên chain B
+    // Chuỗi B — npx hardhat node --port 8548 --config hardhat.config.chainB.js
     chainB: {
       url: "http://127.0.0.1:8548",
       chainId: 31338,
@@ -43,7 +43,7 @@ module.exports = {
         : [],
     },
 
-    // ── Mạng geth riêng của nhóm (buổi 2–3) ─────────────────────────────
+    // geth private-net (lab chính)
     localhost: {
       url: "http://127.0.0.1:8545",
       chainId: 12345,
@@ -51,16 +51,5 @@ module.exports = {
         ? [process.env.DEPLOYER_PRIVATE_KEY]
         : [],
     },
-
-    sepolia: {
-      url: process.env.SEPOLIA_RPC_URL || "https://rpc.sepolia.org",
-      chainId: 11155111,
-      accounts: process.env.DEPLOYER_PRIVATE_KEY
-        ? [process.env.DEPLOYER_PRIVATE_KEY]
-        : [],
-    },
-  },
-  etherscan: {
-    apiKey: process.env.ETHERSCAN_API_KEY || "",
   },
 };
