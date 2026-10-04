@@ -41,6 +41,7 @@ export function licensePublicView(license) {
       effectiveStatus: "none",
       licenseNo: "",
       licenseType: "",
+      licenseTypeLabel: "",
       issuingAuthority: "",
       issuedAt: null,
       expiresAt: null,
@@ -48,20 +49,26 @@ export function licensePublicView(license) {
       hasPdf: false,
       hasDocument: false,
       documentUrl: "",
+      documentMimeType: "",
+      documentFileName: "",
     };
   }
   const effectiveStatus = effectiveLicenseStatus(license);
-  const hasPdf = Boolean(license.pdfFileName || license.pdfRelativePath);
+  const hasPdf = Boolean(license.pdfFileName || license.pdfRelativePath || license.licenseNo);
   const hasDocument = hasLicenseDocument(license);
+  const typeMeta = LICENSE_TYPES.find((t) => t.key === license.licenseType);
   return {
     status: license.status || "none",
     effectiveStatus,
     licenseNo: license.licenseNo || "",
     licenseType: license.licenseType || "",
+    licenseTypeLabel: typeMeta?.label || license.licenseType || "",
     issuingAuthority: license.issuingAuthority || "",
     issuedAt: license.issuedAt || null,
     expiresAt: license.expiresAt || null,
     documentUrl: license.documentUrl || "",
+    documentMimeType: license.uploadedMimeType || "",
+    documentFileName: license.uploadedOriginalName || license.uploadedFileName || "",
     isValid: effectiveStatus === "approved",
     hasPdf,
     hasDocument,

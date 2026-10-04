@@ -33,7 +33,18 @@ export async function saveAndOpenInvoicePdf(invoice, checkoutResults = []) {
     items: (invoice.items || []).map((it) => ({
       ...it,
       tokenIds: it.tokenIds || [],
-      txHashes: it.txHashes || invoice.txByKey?.[`${it.eventId}::${it.eventChainId}`] || [],
+      txHashes:
+        it.txHashes ||
+        invoice.txByKey?.[
+          it.seatId
+            ? `${it.eventId}::${it.eventChainId}::${it.seatId}`
+            : `${it.eventId}::${it.eventChainId}`
+        ] ||
+        [],
+      seatId: it.seatId || "",
+      seatLabel: it.seatLabel || "",
+      zoneCode: it.zoneCode || "",
+      zoneLabel: it.zoneLabel || "",
     })),
     amountNet: invoice.subtotalNet ?? invoice.tax?.amountNet,
     vatAmount: invoice.vatAmount ?? invoice.tax?.vatAmount,

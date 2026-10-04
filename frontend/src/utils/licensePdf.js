@@ -70,3 +70,57 @@ export async function openPublicLicenseDocument(eventId) {
     throw new Error(await blobErrorMessage(err, "Không mở được hồ sơ đính kèm"));
   }
 }
+
+/**
+ * Tải PDF hệ thống + hồ sơ gốc (ảnh/PDF) để xem inline trên trang người dùng.
+ * Trả về object URL — caller phải revoke khi đóng.
+ */
+export async function loadPublicLicenseViewerAssets(eventId, { wantPdf = true, wantDocument = true } = {}) {
+  const result = {
+    eventId: String(eventId || ""),
+    pdfUrl: null,
+    documentUrl: null,
+    documentMimeType: "",
+    errors: [],
+  };
+
+  const tasks = [];
+  if (wantPdf) {
+    tasks.push(
+      fetchPublicLicensePdfBlob(eventId)
+        .then((blob) => {
+          if (blob?.type?.includes("json")) {
+            throw new Error("Không tải được PDF giấy phép");
+          }
+          result.pdfUrl = URL.createObjectURL(blob);
+        })
+        .catch(async (err) => {
+          result.errors.push(await blobErrorMessage(err, "Không tải được PDF hệ thống"));
+        })
+    );
+  }
+  if (wantDocument) {
+    tasks.push(
+      fetchPublicLicenseDocumentBlob(eventId)
+        .then((blob) => {
+          if (blob?.type?.includes("json")) {
+            throw new Error("Không tải được hồ sơ đính kèm");
+          }
+          result.documentUrl = URL.createObjectURL(blob);
+          result.documentMimeType = blob.type || "";
+        })
+        .catch(async (err) => {
+          result.errors.push(await blobErrorMessage(err, "Không tải được hồ sơ đính kèm"));
+        })
+    );
+  }
+
+  await Promise.all(tasks);
+  return result;
+}
+
+export function revokeLicenseViewerAssets(assets) {
+  if (!assets) return;
+  if (assets.pdfUrl) URL.revokeObjectURL(assets.pdfUrl);
+  if (assets.documentUrl) URL.revokeObjectURL(assets.documentUrl);
+}

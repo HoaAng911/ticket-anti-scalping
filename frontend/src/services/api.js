@@ -26,6 +26,56 @@ export async function getMyTickets(wallet) {
   return res.data.data;
 }
 
+export async function getTicketPass(tokenId) {
+  const res = await api.get(`/tickets/${tokenId}/pass`);
+  return res.data.data.pass;
+}
+
+async function ensurePdfBlob(blob) {
+  if (!(blob instanceof Blob)) {
+    throw new Error("Phản hồi PDF không hợp lệ");
+  }
+  const type = (blob.type || "").toLowerCase();
+  if (type.includes("application/pdf") || type === "application/octet-stream" || !type) {
+    // Một số proxy trả octet-stream / type rỗng — kiểm tra magic %PDF
+    const head = await blob.slice(0, 5).text();
+    if (head.startsWith("%PDF")) return blob;
+  }
+  if (type.includes("json") || type.includes("text") || type.includes("html")) {
+    let msg = "Không tải được PDF vé vào cửa";
+    try {
+      const data = JSON.parse(await blob.text());
+      msg = data.error || data.message || msg;
+    } catch {
+      /* ignore */
+    }
+    throw new Error(msg);
+  }
+  const head = await blob.slice(0, 5).text();
+  if (head.startsWith("%PDF")) {
+    return new Blob([blob], { type: "application/pdf" });
+  }
+  throw new Error("File trả về không phải PDF hợp lệ");
+}
+
+export async function fetchTicketPassPdfBlob(tokenId) {
+  const res = await api.get(`/tickets/${tokenId}/pass.pdf`, {
+    responseType: "blob",
+    headers: { Accept: "application/pdf" },
+  });
+  return ensurePdfBlob(res.data);
+}
+
+export async function verifyTicketEntry(payload) {
+  const res = await api.post("/tickets/verify-entry", payload);
+  return res.data.data;
+}
+
+export async function checkInTicketEntry(payload) {
+  const res = await api.post("/tickets/check-in", payload);
+  return res.data.data;
+}
+
 export async function getTicketChain(from, to) {
   const res = await api.get("/tickets/chain", { params: { from, to } });
   return res.data.data;
@@ -118,6 +168,171 @@ export async function uploadAdminLicenseDocument(eventId, file) {
 export async function deleteAdminLicenseDocument(eventId) {
   const res = await api.delete(`/admin/licenses/${eventId}/document`);
   return res.data.data;
+}
+
+export async function getProgramCatalog() {
+  const res = await api.get("/admin/programs/catalog");
+  return res.data.data;
+}
+
+export async function getAdminEventPrograms(params = {}) {
+  const res = await api.get("/admin/programs", { params });
+  return res.data.data;
+}
+
+export async function getAdminEventProgram(eventId) {
+  const res = await api.get(`/admin/programs/${eventId}`);
+  return res.data.data;
+}
+
+export async function replaceAdminEventProgram(eventId, payload) {
+  const res = await api.put(`/admin/programs/${eventId}`, payload);
+  return res.data.data;
+}
+
+export async function createAdminProgramItem(eventId, payload) {
+  const res = await api.post(`/admin/programs/${eventId}/items`, payload);
+  return res.data.data;
+}
+
+export async function updateAdminProgramItem(eventId, itemId, payload) {
+  const res = await api.put(`/admin/programs/${eventId}/items/${itemId}`, payload);
+  return res.data.data;
+}
+
+export async function deleteAdminProgramItem(eventId, itemId) {
+  const res = await api.delete(`/admin/programs/${eventId}/items/${itemId}`);
+  return res.data.data;
+}
+
+export async function getEventSeating(eventId) {
+  const res = await api.get(`/events/${eventId}/seats`);
+  return res.data.data;
+}
+
+export async function holdEventSeats(eventId, payload) {
+  const res = await api.post(`/events/${eventId}/seats/hold`, payload);
+  return res.data.data;
+}
+
+export async function releaseEventSeats(eventId, payload) {
+  const res = await api.post(`/events/${eventId}/seats/release`, payload);
+  return res.data.data;
+}
+
+export async function confirmEventSeats(eventId, payload) {
+  const res = await api.post(`/events/${eventId}/seats/confirm`, payload);
+  return res.data.data;
+}
+
+export async function generateAdminEventSeating(eventId, payload = {}) {
+  const res = await api.post(`/admin/events/${eventId}/seating/generate`, payload);
+  return res.data.data;
+}
+
+export async function getAdminEventSeating(eventId) {
+  const res = await api.get(`/admin/events/${eventId}/seating`);
+  return res.data.data;
+}
+
+export async function manageAdminEventSeats(eventId, payload) {
+  const res = await api.patch(`/admin/events/${eventId}/seating/seats`, payload);
+  return res.data.data;
+}
+
+export async function getAdminEventPayouts() {
+  const res = await api.get("/admin/event-payouts");
+  return res.data.data;
+}
+
+export async function getAdminEventPayout(eventId) {
+  const res = await api.get(`/admin/events/${eventId}/payout`);
+  return res.data.data;
+}
+
+export async function updateAdminEventPayout(eventId, payload) {
+  const res = await api.patch(`/admin/events/${eventId}/payout`, payload);
+  return res.data.data;
+}
+
+export async function deleteAdminEventPayout(eventId, { hard = false } = {}) {
+  const res = await api.delete(`/admin/events/${eventId}/payout`, {
+    params: hard ? { hard: true } : {},
+  });
+  return res.data.data;
+}
+
+export async function settleAdminEventPayout(eventId, payload = {}) {
+  const res = await api.post(`/admin/events/${eventId}/settle-payout`, payload);
+  return res.data.data;
+}
+
+export async function getAdminPaymentContracts(params = {}) {
+  const res = await api.get("/admin/payment-contracts", { params });
+  return res.data.data;
+}
+
+export async function getAdminPaymentContract(id) {
+  const res = await api.get(`/admin/payment-contracts/${id}`);
+  return res.data.data;
+}
+
+export async function createAdminPaymentContract(payload) {
+  const res = await api.post("/admin/payment-contracts", payload);
+  return res.data.data;
+}
+
+export async function updateAdminPaymentContract(id, payload) {
+  const res = await api.patch(`/admin/payment-contracts/${id}`, payload);
+  return res.data.data;
+}
+
+export async function deleteAdminPaymentContract(id) {
+  const res = await api.delete(`/admin/payment-contracts/${id}`);
+  return res.data.data;
+}
+
+export async function settleAdminPaymentStage(contractId, stageId, payload = {}) {
+  const res = await api.post(
+    `/admin/payment-contracts/${contractId}/stages/${stageId}/settle`,
+    payload
+  );
+  return res.data.data;
+}
+
+export async function patchAdminPaymentStage(contractId, stageId, payload) {
+  const res = await api.patch(
+    `/admin/payment-contracts/${contractId}/stages/${stageId}`,
+    payload
+  );
+  return res.data.data;
+}
+
+export async function getAdminPaymentContractCatalog() {
+  const res = await api.get("/admin/payment-contracts/catalog");
+  return res.data.data;
+}
+
+export async function seedAdminPaymentContracts(payload = {}) {
+  const res = await api.post("/admin/payment-contracts/seed", payload);
+  return res.data.data;
+}
+
+export async function regenerateAdminPaymentContractPdf(id) {
+  const res = await api.post(`/admin/payment-contracts/${id}/pdf`);
+  return res.data.data;
+}
+
+/** Tải / xem PDF hợp đồng thanh toán (blob) */
+export async function fetchAdminPaymentContractPdfBlob(id, { download = false, regenerate = false } = {}) {
+  const res = await api.get(`/admin/payment-contracts/${id}/pdf`, {
+    responseType: "blob",
+    params: {
+      ...(download ? { download: 1 } : {}),
+      ...(regenerate ? { regenerate: 1 } : {}),
+    },
+  });
+  return ensurePdfBlob(res.data);
 }
 
 export async function getOrganizerProfileCatalog() {
@@ -309,6 +524,11 @@ export async function getAdminUsers(params = {}) {
   return res.data.data;
 }
 
+export async function getAdminUser(id) {
+  const res = await api.get(`/admin/users/${id}`);
+  return res.data.data.user;
+}
+
 export async function createAdminUser(payload) {
   const res = await api.post("/admin/users", payload);
   return res.data.data.user;
@@ -319,9 +539,9 @@ export async function updateAdminUser(id, payload) {
   return res.data.data;
 }
 
-export async function deleteAdminUser(id) {
-  const res = await api.delete(`/admin/users/${id}`);
-  return res.data.data.user;
+export async function deleteAdminUser(id, { hard = false } = {}) {
+  const res = await api.delete(`/admin/users/${id}`, { params: hard ? { hard: true } : {} });
+  return res.data.data;
 }
 
 export default api;

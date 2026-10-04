@@ -13,6 +13,7 @@ import {
   Download,
   ChevronDown,
   ChevronUp,
+  QrCode,
 } from "lucide-react";
 import { getMyTickets, getTicketHistory, getInvoiceByTokenId } from "../../services/api.js";
 import {
@@ -24,6 +25,7 @@ import {
 import { useWallet } from "../../hooks/useWallet.js";
 import { downloadInvoicePdfById, openInvoicePdfById } from "../../utils/invoicePdf.js";
 import { explainContractError } from "../../utils/contractErrors.js";
+import TicketPassModal from "../components/TicketPassModal.jsx";
 
 function shortHash(h) {
   if (!h) return "—";
@@ -58,6 +60,7 @@ export default function MyTickets() {
   const [invoiceByToken, setInvoiceByToken] = useState({});
   const [busyInvoice, setBusyInvoice] = useState(null);
   const [busyList, setBusyList] = useState(null);
+  const [passTokenId, setPassTokenId] = useState(null);
 
   async function load() {
     if (!account) return;
@@ -298,6 +301,24 @@ export default function MyTickets() {
                       {open ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                     </h3>
                     <p>{t.event?.title || `eventChainId ${t.eventChainId}`}</p>
+                    {(t.seatLabel || t.seatId) && (
+                      <p>
+                        Ghế {t.seatLabel || t.seatId}
+                        {t.zoneLabel || t.zoneCode
+                          ? ` · khu ${t.zoneLabel || t.zoneCode}`
+                          : ""}
+                      </p>
+                    )}
+                    {t.checkedIn ? (
+                      <p style={{ color: "var(--u-ok, #059669)" }}>
+                        Đã check-in
+                        {t.checkedInAt
+                          ? ` · ${new Date(t.checkedInAt).toLocaleString("vi-VN")}`
+                          : ""}
+                      </p>
+                    ) : (
+                      <p>Vé vào cửa: chưa check-in</p>
+                    )}
                     <p>
                       Giá gốc {t.originalPrice} ETH · mint{" "}
                       {new Date(t.mintedAt).toLocaleString("vi-VN")}
@@ -318,6 +339,13 @@ export default function MyTickets() {
                   </div>
                 </button>
                 <div className="user-ticket-actions" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    className="user-btn"
+                    onClick={() => setPassTokenId(t.tokenId)}
+                  >
+                    <QrCode size={15} /> Vé vào cửa
+                  </button>
                   <button
                     type="button"
                     className="user-btn secondary"
@@ -451,6 +479,12 @@ export default function MyTickets() {
           )}
         </div>
       </section>
+
+      <TicketPassModal
+        open={passTokenId != null}
+        tokenId={passTokenId}
+        onClose={() => setPassTokenId(null)}
+      />
     </>
   );
 }

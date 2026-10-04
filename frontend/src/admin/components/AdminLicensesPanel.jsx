@@ -60,8 +60,284 @@ function statusLabel(catalog, key) {
   return catalog?.statuses?.find((s) => s.key === key)?.label || key || "—";
 }
 
-function typeLabel(catalog, key) {
-  return catalog?.types?.find((t) => t.key === key)?.label || key || "—";
+/** Modal hồ sơ GP — form state local để gõ không re-render cả bảng */
+function LicenseProfileModal({
+  open,
+  row,
+  catalog,
+  busy,
+  uploadBusy,
+  onClose,
+  onSave,
+  onUpload,
+  onRemoveUpload,
+  onViewDocument,
+  onViewPdf,
+  onSubmitPending,
+  onApprove,
+}) {
+  const fileRef = useRef(null);
+  const [form, setForm] = useState(emptyEdit);
+  const eventId = row?.eventId;
+  const lic = row?.license || {};
+  const workflow = lic.workflow || { steps: [] };
+  const maxMb = catalog?.upload?.maxSizeMb || 12;
+
+  useEffect(() => {
+    if (!open || !row) return;
+    const L = row.license || {};
+    setForm({
+      licenseNo: L.licenseNo || "",
+      licenseType: L.licenseType || "to_chuc_su_kien",
+      issuingAuthority: L.issuingAuthority || "",
+      issuedAt: toInputDate(L.issuedAt),
+      expiresAt: toInputDate(L.expiresAt),
+      status: L.status === "none" ? "draft" : L.status || "draft",
+      documentUrl: L.documentUrl || "",
+      notes: L.notes || "",
+      rejectionReason: L.rejectionReason || "",
+    });
+    if (fileRef.current) fileRef.current.value = "";
+  }, [open, eventId]);
+
+  function setField(field, value) {
+    setForm((f) => ({ ...f, [field]: value }));
+  }
+
+  function submit(e) {
+    e.preventDefault();
+    onSave?.(form);
+  }
+
+  function pickFile(e) {
+    const file = e.target.files?.[0];
+    if (file) onUpload?.(file);
+  }
+
+  const steps = workflow.steps || [];
+  const doneCount = steps.filter((s) => s.done).length;
+
+  return (
+    <AdminModal
+      open={open}
+      size="lg"
+      icon={Stamp}
+      title="Hồ sơ giấy phép"
+      subtitle={row?.title || "Khai báo · Upload · Duyệt · Cấp phép"}
+      onClose={busy || uploadBusy ? () => {} : onClose}
+      closeOnBackdrop={!busy && !uploadBusy}
+      footer={
+        <>
+          <button
+            type="button"
+            className="lte-btn lte-btn-default"
+            disabled={busy || uploadBusy}
+            onClick={onClose}
+          >
+            Đóng
+          </button>
+          <button
+            type="button"
+            className="lte-btn lte-btn-default"
+            disabled={busy || uploadBusy || !lic.workflow?.canSubmitPending}
+            onClick={onSubmitPending}
+          >
+            <Clock3 size={15} /> Gửi chờ duyệt
+          </button>
+          <button
+            type="button"
+            className="lte-btn lte-btn-primary"
+            disabled={busy || uploadBusy || !lic.workflow?.canApprove}
+            onClick={onApprove}
+          >
+            <CheckCircle2 size={15} /> Cấp phép
+          </button>
+        </>
+      }
+    >
+      <div className="lte-license-modal">
+        <div className="lte-workflow lte-workflow-steps" aria-label="Tiến độ hồ sơ">
+          {steps.map((s, i) => (
+            <div
+              key={s.key}
+              className={`lte-workflow-step ${s.done ? "is-done" : ""} ${
+                !s.done && (i === 0 || steps[i - 1]?.done) ? "is-current" : ""
+              }`}
+            >
+              <span className="lte-workflow-num">
+                {s.done ? <CheckCircle2 size={14} /> : i + 1}
+              </span>
+              <span className="lte-workflow-label">{s.label}</span>
+              {i < steps.length - 1 ? <span className="lte-workflow-line" aria-hidden /> : null}
+            </div>
+          ))}
+          <p className="lte-workflow-meta">
+            Hoàn thành {doneCount}/{steps.length || 0} bước
+          </p>
+        </div>
+
+        <div className="lte-license-status-row">
+          <span className="lte-muted">Trạng thái hiện tại</span>
+          <span className={`lte-badge ${statusTone(lic.effectiveStatus || form.status)}`}>
+            {statusLabel(catalog, lic.effectiveStatus || form.status)}
+          </span>
+        </div>
+
+        <form className="lte-form lte-license-form" onSubmit={submit}>
+          <div className="lte-form-grid">
+            <label>
+              Số giấy phép
+              <input
+                value={form.licenseNo}
+                onChange={(e) => setField("licenseNo", e.target.value)}
+                placeholder="VD: GP-SK-2026-001"
+                required
+                autoComplete="off"
+              />
+            </label>
+            <label>
+              Loại giấy phép
+              <select
+                value={form.licenseType}
+                onChange={(e) => setField("licenseType", e.target.value)}
+              >
+                {(catalog.types || []).map((t) => (
+                  <option key={t.key} value={t.key}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="lte-span-2">
+              Cơ quan cấp
+              <input
+                value={form.issuingAuthority}
+                onChange={(e) => setField("issuingAuthority", e.target.value)}
+                placeholder="Sở VHTTDL / UBND…"
+                required
+                autoComplete="organization"
+              />
+            </label>
+            <label>
+              Ngày cấp
+              <input
+                type="date"
+                value={form.issuedAt}
+                onChange={(e) => setField("issuedAt", e.target.value)}
+              />
+            </label>
+            <label>
+              Ngày hết hạn
+              <input
+                type="date"
+                value={form.expiresAt}
+                onChange={(e) => setField("expiresAt", e.target.value)}
+              />
+            </label>
+          </div>
+
+          <div className={`lte-upload-zone ${lic.hasDocument ? "has-file" : ""}`}>
+            <div className="lte-upload-zone-head">
+              <span className="lte-upload-zone-icon">
+                <Upload size={18} />
+              </span>
+              <div>
+                <strong>File giấy phép gốc</strong>
+                <p>PDF, JPG, PNG hoặc WEBP · tối đa {maxMb}MB</p>
+              </div>
+            </div>
+
+            {lic.hasDocument ? (
+              <div className="lte-upload-chip">
+                <Paperclip size={15} />
+                <span className="lte-upload-chip-name">
+                  {lic.uploadedOriginalName || "Đã có hồ sơ đính kèm"}
+                </span>
+                <button
+                  type="button"
+                  className="lte-btn lte-btn-default lte-btn-sm"
+                  disabled={busy || uploadBusy}
+                  onClick={onViewDocument}
+                >
+                  Xem
+                </button>
+                {lic.effectiveStatus !== "approved" ? (
+                  <button
+                    type="button"
+                    className="lte-icon-btn danger"
+                    title="Xóa file"
+                    disabled={uploadBusy}
+                    onClick={onRemoveUpload}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                ) : null}
+              </div>
+            ) : (
+              <p className="lte-upload-hint">
+                Bắt buộc đính kèm trước khi gửi chờ duyệt hoặc cấp phép.
+              </p>
+            )}
+
+            <label className="lte-upload-pick">
+              <input
+                ref={fileRef}
+                type="file"
+                accept={catalog?.upload?.accept || ".pdf,.jpg,.jpeg,.png,.webp"}
+                disabled={uploadBusy || busy}
+                onChange={pickFile}
+              />
+              <span className="lte-btn lte-btn-default lte-btn-sm">
+                {uploadBusy ? (
+                  <>
+                    <Loader2 size={14} className="spin" /> Đang tải…
+                  </>
+                ) : (
+                  <>
+                    <Upload size={14} /> {lic.hasDocument ? "Thay file khác" : "Chọn file"}
+                  </>
+                )}
+              </span>
+            </label>
+          </div>
+
+          <label>
+            Link bổ sung (tuỳ chọn)
+            <input
+              value={form.documentUrl}
+              onChange={(e) => setField("documentUrl", e.target.value)}
+              placeholder="https://… nếu hồ sơ lưu ngoài hệ thống"
+            />
+          </label>
+          <label>
+            Ghi chú
+            <textarea
+              rows={3}
+              value={form.notes}
+              onChange={(e) => setField("notes", e.target.value)}
+              placeholder="Ghi chú nội bộ về hồ sơ…"
+            />
+          </label>
+
+          <div className="lte-license-form-actions">
+            <button type="submit" className="lte-btn lte-btn-primary" disabled={busy || uploadBusy}>
+              <Save size={15} /> {busy ? "Đang lưu…" : "Lưu nháp"}
+            </button>
+            {form.licenseNo ? (
+              <button
+                type="button"
+                className="lte-btn lte-btn-default"
+                disabled={busy || uploadBusy}
+                onClick={() => onViewPdf?.(form.licenseNo)}
+              >
+                <FileText size={15} /> PDF hệ thống
+              </button>
+            ) : null}
+          </div>
+        </form>
+      </div>
+    </AdminModal>
+  );
 }
 
 export default function AdminLicensesPanel({ onMessage }) {
@@ -74,24 +350,30 @@ export default function AdminLicensesPanel({ onMessage }) {
   const [busyId, setBusyId] = useState(null);
   const [editId, setEditId] = useState(null);
   const [editRow, setEditRow] = useState(null);
-  const [form, setForm] = useState(emptyEdit);
   const [uploadBusy, setUploadBusy] = useState(false);
   const [dialog, setDialog] = useState(null);
-  const fileRef = useRef(null);
+
+  const qRef = useRef(q);
+  const statusRef = useRef(status);
+  const editIdRef = useRef(editId);
+  qRef.current = q;
+  statusRef.current = status;
+  editIdRef.current = editId;
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const data = await getAdminLicenses({
-        q: q.trim() || undefined,
-        status: status || undefined,
+        q: qRef.current.trim() || undefined,
+        status: statusRef.current || undefined,
         limit: 200,
       });
       setItems(data.items || []);
       setStats(data.stats || {});
       setCatalog(data.catalog || { types: [], statuses: [] });
-      if (editId) {
-        const row = (data.items || []).find((r) => r.eventId === editId);
+      const currentId = editIdRef.current;
+      if (currentId) {
+        const row = (data.items || []).find((r) => r.eventId === currentId);
         if (row) setEditRow(row);
       }
     } catch (err) {
@@ -99,32 +381,25 @@ export default function AdminLicensesPanel({ onMessage }) {
     } finally {
       setLoading(false);
     }
-  }, [q, status, onMessage, editId]);
+  }, [onMessage]);
 
   useEffect(() => {
     load();
   }, [load]);
 
   function startEdit(row) {
-    const lic = row.license || {};
     setEditId(row.eventId);
     setEditRow(row);
-    setForm({
-      licenseNo: lic.licenseNo || "",
-      licenseType: lic.licenseType || "to_chuc_su_kien",
-      issuingAuthority: lic.issuingAuthority || "",
-      issuedAt: toInputDate(lic.issuedAt),
-      expiresAt: toInputDate(lic.expiresAt),
-      status: lic.status === "none" ? "draft" : lic.status || "draft",
-      documentUrl: lic.documentUrl || "",
-      notes: lic.notes || "",
-      rejectionReason: lic.rejectionReason || "",
-    });
   }
 
-  async function onSave(e) {
-    e.preventDefault();
+  function closeEdit() {
+    setEditId(null);
+    setEditRow(null);
+  }
+
+  async function onSave(form) {
     if (!editId) return;
+    const editLic = editRow?.license || {};
     setBusyId(editId);
     try {
       const keepStatus = ["pending", "approved", "suspended", "expired", "rejected"].includes(
@@ -141,7 +416,7 @@ export default function AdminLicensesPanel({ onMessage }) {
       setEditRow(data);
       onMessage?.(
         keepStatus === "draft"
-          ? "Đã lưu hồ sơ (nháp). Tiếp theo: upload file → gửi chờ duyệt → cấp phép."
+          ? "Đã lưu hồ sơ (nháp). Tiếp theo: upload file, gửi chờ duyệt, rồi cấp phép."
           : "Đã cập nhật hồ sơ giấy phép."
       );
       await load();
@@ -169,7 +444,6 @@ export default function AdminLicensesPanel({ onMessage }) {
       onMessage?.(err.response?.data?.error || err.message);
     } finally {
       setUploadBusy(false);
-      if (fileRef.current) fileRef.current.value = "";
     }
   }
 
@@ -199,19 +473,19 @@ export default function AdminLicensesPanel({ onMessage }) {
     });
   }
 
-  async function runStatusChange(eventId, nextStatus, rejectionReason) {
+  async function runStatusChange(eventId, nextStatus, extra = {}) {
     setBusyId(eventId);
     try {
-      const data = await patchAdminLicenseStatus(eventId, { status: nextStatus, rejectionReason });
+      const data = await patchAdminLicenseStatus(eventId, { status: nextStatus, ...extra });
       if (editId === eventId) setEditRow(data);
       onMessage?.(
         nextStatus === "approved"
-          ? "Đã cấp phép hoạt động."
-          : nextStatus === "rejected"
-            ? "Đã từ chối hồ sơ."
-            : nextStatus === "pending"
-              ? "Đã gửi chờ duyệt."
-              : `Đã cập nhật trạng thái: ${nextStatus}`
+          ? "Đã cấp phép sự kiện."
+          : nextStatus === "pending"
+            ? "Đã gửi hồ sơ chờ duyệt."
+            : nextStatus === "rejected"
+              ? "Đã từ chối hồ sơ."
+              : "Đã cập nhật trạng thái."
       );
       await load();
     } catch (err) {
@@ -225,16 +499,16 @@ export default function AdminLicensesPanel({ onMessage }) {
     if (nextStatus === "rejected") {
       setDialog({
         type: "prompt",
-        title: "Từ chối hồ sơ",
-        message: "Nhập lý do từ chối để ban tổ chức chỉnh sửa lại.",
+        title: "Từ chối giấy phép?",
+        message: "Nhập lý do từ chối (bắt buộc).",
         promptLabel: "Lý do từ chối",
-        promptDefault: "Hồ sơ chưa đủ điều kiện",
+        promptRequired: true,
         confirmLabel: "Từ chối",
         tone: "danger",
         icon: XCircle,
         onConfirm: async (reason) => {
           setDialog(null);
-          await runStatusChange(eventId, "rejected", reason);
+          await runStatusChange(eventId, "rejected", { rejectionReason: reason });
         },
       });
       return;
@@ -242,8 +516,8 @@ export default function AdminLicensesPanel({ onMessage }) {
     if (nextStatus === "approved") {
       setDialog({
         type: "confirm",
-        title: "Cấp phép hoạt động?",
-        message: "Xác nhận hồ sơ hợp lệ và cấp phép cho sự kiện này.",
+        title: "Cấp phép sự kiện?",
+        message: "Xác nhận hồ sơ đủ điều kiện và cấp phép trên hệ thống.",
         confirmLabel: "Cấp phép",
         icon: CheckCircle2,
         onConfirm: async () => {
@@ -313,9 +587,6 @@ export default function AdminLicensesPanel({ onMessage }) {
     return stats[key] || 0;
   }
 
-  const editLic = editRow?.license || {};
-  const workflow = editLic.workflow || { steps: [] };
-
   return (
     <div className="lte-panel">
       <div className="lte-stats-grid" style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))" }}>
@@ -356,7 +627,14 @@ export default function AdminLicensesPanel({ onMessage }) {
                 onChange={(e) => setQ(e.target.value)}
               />
             </label>
-            <select value={status} onChange={(e) => setStatus(e.target.value)}>
+            <select
+              value={status}
+              onChange={(e) => {
+                setStatus(e.target.value);
+                statusRef.current = e.target.value;
+                queueMicrotask(() => load());
+              }}
+            >
               <option value="">Mọi trạng thái</option>
               {(catalog.statuses || []).map((s) => (
                 <option key={s.key} value={s.key}>
@@ -374,8 +652,8 @@ export default function AdminLicensesPanel({ onMessage }) {
         </div>
 
         <p className="lte-hint" style={{ padding: "0 1.1rem 0.75rem", margin: 0 }}>
-          Quy trình: <strong>Khai báo</strong> → <strong>Upload file GP</strong> (PDF/ảnh) →{" "}
-          <strong>Gửi chờ duyệt</strong> → <strong>Cấp phép</strong>. Không cấp phép nếu thiếu hồ sơ
+          Quy trình: <strong>Khai báo</strong> · <strong>Upload file GP</strong> ·{" "}
+          <strong>Gửi chờ duyệt</strong> · <strong>Cấp phép</strong>. Không cấp phép nếu thiếu hồ sơ
           đính kèm.
         </p>
 
@@ -403,7 +681,7 @@ export default function AdminLicensesPanel({ onMessage }) {
                     const lic = row.license;
                     const editing = editId === row.eventId;
                     return (
-                      <tr key={row.eventId}>
+                      <tr key={row.eventId} className={editing ? "is-active-row" : undefined}>
                         <td>
                           <div className="lte-cell-stack">
                             <strong>{row.title}</strong>
@@ -422,8 +700,7 @@ export default function AdminLicensesPanel({ onMessage }) {
                           {lic.hasDocument ? (
                             <button
                               type="button"
-                              className="lte-btn lte-btn-default"
-                              style={{ padding: "0.25rem 0.5rem", fontSize: "0.8rem" }}
+                              className="lte-btn lte-btn-default lte-btn-sm"
                               disabled={busyId === row.eventId}
                               onClick={() => onViewDocument(row.eventId)}
                               title={lic.uploadedOriginalName || "Xem hồ sơ"}
@@ -437,7 +714,7 @@ export default function AdminLicensesPanel({ onMessage }) {
                         <td>{lic.issuingAuthority || "—"}</td>
                         <td className="lte-nowrap">
                           {lic.issuedAt ? toInputDate(lic.issuedAt) : "—"}
-                          {" → "}
+                          {" · "}
                           {lic.expiresAt ? toInputDate(lic.expiresAt) : "—"}
                         </td>
                         <td>
@@ -451,7 +728,7 @@ export default function AdminLicensesPanel({ onMessage }) {
                               type="button"
                               className="lte-btn lte-btn-default"
                               disabled={busyId === row.eventId}
-                              onClick={() => (editing ? setEditId(null) : startEdit(row))}
+                              onClick={() => (editing ? closeEdit() : startEdit(row))}
                             >
                               {editing ? "Đóng" : "Hồ sơ"}
                             </button>
@@ -520,193 +797,21 @@ export default function AdminLicensesPanel({ onMessage }) {
         </div>
       </div>
 
-      {editId && (
-        <AdminModal
-          open
-          size="lg"
-          icon={Stamp}
-          title="Hồ sơ giấy phép"
-          subtitle={editRow?.title || "Cập nhật theo quy trình khai báo → upload → duyệt"}
-          onClose={() => {
-            setEditId(null);
-            setEditRow(null);
-          }}
-          footer={
-            <>
-              <button
-                type="button"
-                className="lte-btn lte-btn-default"
-                onClick={() => {
-                  setEditId(null);
-                  setEditRow(null);
-                }}
-              >
-                Đóng
-              </button>
-              <button
-                type="button"
-                className="lte-btn lte-btn-default"
-                disabled={busyId === editId || !editLic.workflow?.canSubmitPending}
-                onClick={() => onQuickStatus(editId, "pending")}
-              >
-                <Clock3 size={15} /> Gửi chờ duyệt
-              </button>
-              <button
-                type="button"
-                className="lte-btn lte-btn-primary"
-                disabled={busyId === editId || !editLic.workflow?.canApprove}
-                onClick={() => onQuickStatus(editId, "approved")}
-              >
-                <CheckCircle2 size={15} /> Cấp phép
-              </button>
-            </>
-          }
-        >
-            <ol className="lte-workflow">
-              {(workflow.steps || []).map((s) => (
-                <li key={s.key} className={s.done ? "done" : ""}>
-                  {s.done ? <CheckCircle2 size={14} /> : <span className="dot" />}
-                  {s.label}
-                </li>
-              ))}
-            </ol>
-
-            <form className="lte-form" onSubmit={onSave} style={{ maxWidth: "none" }}>
-              <div className="lte-form-grid">
-                <label>
-                  Số giấy phép
-                  <input
-                    value={form.licenseNo}
-                    onChange={(e) => setForm({ ...form, licenseNo: e.target.value })}
-                    placeholder="VD: GP-SK-2026-001"
-                    required
-                  />
-                </label>
-                <label>
-                  Loại giấy phép
-                  <select
-                    value={form.licenseType}
-                    onChange={(e) => setForm({ ...form, licenseType: e.target.value })}
-                  >
-                    {(catalog.types || []).map((t) => (
-                      <option key={t.key} value={t.key}>
-                        {t.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Cơ quan cấp
-                  <input
-                    value={form.issuingAuthority}
-                    onChange={(e) => setForm({ ...form, issuingAuthority: e.target.value })}
-                    placeholder="Sở VHTTDL / UBND…"
-                    required
-                  />
-                </label>
-                <label>
-                  Trạng thái hiện tại
-                  <input
-                    value={statusLabel(catalog, editLic.effectiveStatus || form.status)}
-                    disabled
-                  />
-                </label>
-                <label>
-                  Ngày cấp
-                  <input
-                    type="date"
-                    value={form.issuedAt}
-                    onChange={(e) => setForm({ ...form, issuedAt: e.target.value })}
-                  />
-                </label>
-                <label>
-                  Ngày hết hạn
-                  <input
-                    type="date"
-                    value={form.expiresAt}
-                    onChange={(e) => setForm({ ...form, expiresAt: e.target.value })}
-                  />
-                </label>
-              </div>
-
-              <div className="lte-upload-box">
-                <div className="lte-upload-head">
-                  <Upload size={16} />
-                  <strong>Upload file giấy phép gốc</strong>
-                  <span>PDF / JPG / PNG / WEBP · tối đa {catalog?.upload?.maxSizeMb || 12}MB</span>
-                </div>
-                {editLic.hasDocument ? (
-                  <div className="lte-upload-file">
-                    <Paperclip size={15} />
-                    <span>{editLic.uploadedOriginalName || "Đã có hồ sơ đính kèm"}</span>
-                    <button
-                      type="button"
-                      className="lte-btn lte-btn-default"
-                      disabled={busyId === editId || uploadBusy}
-                      onClick={() => onViewDocument(editId)}
-                    >
-                      Xem
-                    </button>
-                    {editLic.effectiveStatus !== "approved" && (
-                      <button
-                        type="button"
-                        className="lte-btn lte-btn-default"
-                        disabled={uploadBusy}
-                        onClick={onRemoveUpload}
-                      >
-                        <Trash2 size={14} /> Xóa
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  <p className="lte-muted" style={{ margin: "0.35rem 0 0.6rem" }}>
-                    Chưa có file — bắt buộc upload trước khi gửi chờ duyệt / cấp phép.
-                  </p>
-                )}
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept={catalog?.upload?.accept || ".pdf,.jpg,.jpeg,.png,.webp"}
-                  disabled={uploadBusy}
-                  onChange={(e) => onUploadFile(e.target.files?.[0])}
-                />
-              </div>
-
-              <label>
-                Link bổ sung (tuỳ chọn)
-                <input
-                  value={form.documentUrl}
-                  onChange={(e) => setForm({ ...form, documentUrl: e.target.value })}
-                  placeholder="https://… nếu hồ sơ lưu ngoài hệ thống"
-                />
-              </label>
-              <label>
-                Ghi chú
-                <textarea
-                  rows={3}
-                  value={form.notes}
-                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                />
-              </label>
-
-              <div className="lte-action-group" style={{ gap: 8, flexWrap: "wrap" }}>
-                <button type="submit" className="lte-btn lte-btn-primary" disabled={busyId === editId}>
-                  <Save size={15} /> {busyId === editId ? "Đang lưu…" : "Lưu nháp"}
-                </button>
-                {form.licenseNo ? (
-                  <button
-                    type="button"
-                    className="lte-btn lte-btn-default"
-                    disabled={busyId === editId}
-                    onClick={() => onViewPdf(editId, form.licenseNo)}
-                  >
-                    <FileText size={15} /> PDF hệ thống
-                  </button>
-                ) : null}
-              </div>
-            </form>
-        </AdminModal>
-      )}
+      <LicenseProfileModal
+        open={Boolean(editId && editRow)}
+        row={editRow}
+        catalog={catalog}
+        busy={busyId === editId}
+        uploadBusy={uploadBusy}
+        onClose={closeEdit}
+        onSave={onSave}
+        onUpload={onUploadFile}
+        onRemoveUpload={onRemoveUpload}
+        onViewDocument={() => onViewDocument(editId)}
+        onViewPdf={(licenseNo) => onViewPdf(editId, licenseNo)}
+        onSubmitPending={() => onQuickStatus(editId, "pending")}
+        onApprove={() => onQuickStatus(editId, "approved")}
+      />
 
       <AdminConfirmModal
         open={Boolean(dialog)}

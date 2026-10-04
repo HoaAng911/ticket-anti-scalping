@@ -12,33 +12,62 @@ import {
   getLedgerStatus,
   getHistoryFromLogs,
 } from "../services/blockchainService.js";
+import {
+  buildTicketPass,
+  generateTicketPassPdf,
+  verifyPassPayload,
+  checkInTicket,
+  loadTicketPassContext,
+} from "../services/ticketPassService.js";
+import fs from "fs";
 
 async function enrichWithEventMeta(tickets) {
   const chainIds = [...new Set(tickets.map((t) => t.eventChainId).filter(Boolean))];
-  const events = await Event.find({ "ticketTypes.eventChainId": { $in: chainIds } })
-    .select("title location startTime ticketTypes")
-    .lean();
+  const tokenIds = tickets.map((t) => Number(t.tokenId)).filter(Number.isFinite);
+  const [events, mongoTickets] = await Promise.all([
+    Event.find({ "ticketTypes.eventChainId": { $in: chainIds } })
+      .select("title location startTime ticketTypes")
+      .lean(),
+    Ticket.find({ tokenId: { $in: tokenIds } })
+      .select(
+        "tokenId seatId seatLabel zoneCode zoneLabel checkedInAt checkedInBy checkInNote event"
+      )
+      .lean(),
+  ]);
   const byChain = new Map();
   for (const ev of events) {
     for (const t of ev.ticketTypes || []) {
       byChain.set(Number(t.eventChainId), ev);
     }
   }
-  return tickets.map((t) => ({
-    ...t,
-    event: byChain.get(Number(t.eventChainId))
-      ? {
-          _id: byChain.get(Number(t.eventChainId))._id,
-          title: byChain.get(Number(t.eventChainId)).title,
-          location: byChain.get(Number(t.eventChainId)).location,
-          startTime: byChain.get(Number(t.eventChainId)).startTime,
-        }
-      : null,
-    // aliases cho UI cũ
-    blockIndex: t.block?.blockIndex ?? t.block?.index ?? null,
-    prevBlockHash: t.block?.prevBlockHash ?? null,
-    blockHash: t.block?.blockHash ?? null,
-  }));
+  const byToken = new Map(mongoTickets.map((m) => [Number(m.tokenId), m]));
+
+  return tickets.map((t) => {
+    const ev = byChain.get(Number(t.eventChainId));
+    const m = byToken.get(Number(t.tokenId));
+    return {
+      ...t,
+      seatId: m?.seatId || t.seatId || "",
+      seatLabel: m?.seatLabel || t.seatLabel || "",
+      zoneCode: m?.zoneCode || t.zoneCode || "",
+      zoneLabel: m?.zoneLabel || t.zoneLabel || "",
+      checkedInAt: m?.checkedInAt || null,
+      checkedInBy: m?.checkedInBy || "",
+      checkInNote: m?.checkInNote || "",
+      checkedIn: Boolean(m?.checkedInAt),
+      event: ev
+        ? {
+            _id: ev._id,
+            title: ev.title,
+            location: ev.location,
+            startTime: ev.startTime,
+          }
+        : null,
+      blockIndex: t.block?.blockIndex ?? t.block?.index ?? null,
+      prevBlockHash: t.block?.prevBlockHash ?? null,
+      blockHash: t.block?.blockHash ?? null,
+    };
+  });
 }
 
 /** Vé của ví — nguồn chính: ledger (geth). Mongo chỉ gắn metadata sự kiện. */
@@ -172,4 +201,137 @@ export const ticketHistory = asyncHandler(async (req, res) => {
   const tokenId = Number(req.params.tokenId);
   const history = await getHistoryFromLogs(tokenId);
   res.json({ success: true, data: { tokenId, history, source: "ledger" } });
+});
+
+/** Vé vào cửa + QR (JSON) */
+export const getTicketPass = asyncHandler(async (req, res) => {
+  const pass = await buildTicketPass(req.params.tokenId);
+  res.json({ success: true, data: { pass } });
+});
+
+/** PDF vé vào cửa */
+export const getTicketPassPdf = asyncHandler(async (req, res) => {
+  const { pass, absolutePath, fileName } = await generateTicketPassPdf(req.params.tokenId);
+  if (!fs.existsSync(absolutePath)) {
+    const err = new Error("Không tạo được file PDF vé");
+    err.status = 500;
+    throw err;
+  }
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `inline; filename="${fileName}"; filename*=UTF-8''${encodeURIComponent(`ve-vao-cua-${pass.tokenId}.pdf`)}`);
+  res.setHeader("X-Ticket-Token-Id", String(pass.tokenId));
+  res.setHeader("Cache-Control", "no-store");
+  const stream = fs.createReadStream(absolutePath);
+  stream.on("error", (e) => {
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, error: e.message || "Lỗi đọc PDF" });
+    } else {
+      res.destroy(e);
+    }
+  });
+  stream.pipe(res);
+});
+
+/** Xác thực QR / token trước khi vào cửa (không ghi check-in) */
+export const verifyTicketEntry = asyncHandler(async (req, res) => {
+  let tokenId = req.body?.tokenId != null ? Number(req.body.tokenId) : null;
+  let payload = req.body?.qr || req.body?.payload || null;
+
+  if (typeof payload === "string") {
+    try {
+      payload = JSON.parse(payload);
+    } catch {
+      return res.status(400).json({ success: false, error: "Chuỗi QR không phải JSON hợp lệ" });
+    }
+  }
+
+  if (payload) {
+    const verified = verifyPassPayload(payload);
+    if (!verified.ok) {
+      return res.status(400).json({ success: false, error: verified.error });
+    }
+    tokenId = verified.payload.tokenId;
+  }
+
+  if (!Number.isFinite(tokenId)) {
+    return res.status(400).json({ success: false, error: "Cần tokenId hoặc mã QR" });
+  }
+
+  const ctx = await loadTicketPassContext(tokenId);
+  if (payload?.wallet && payload.wallet !== ctx.ownerWallet) {
+    return res.status(409).json({
+      success: false,
+      error: "Ví trên QR không khớp chủ vé hiện tại (có thể đã chuyển nhượng)",
+      data: { ticket: ctx },
+    });
+  }
+
+  res.json({
+    success: true,
+    data: {
+      valid: true,
+      checkedIn: Boolean(ctx.checkedInAt),
+      ticket: ctx,
+      message: ctx.checkedInAt
+        ? `Vé hợp lệ nhưng ĐÃ check-in lúc ${new Date(ctx.checkedInAt).toLocaleString("vi-VN")}`
+        : "Vé hợp lệ — chưa check-in",
+    },
+  });
+});
+
+/** Check-in vào cửa */
+export const checkInTicketEntry = asyncHandler(async (req, res) => {
+  let tokenId = req.body?.tokenId != null ? Number(req.body.tokenId) : null;
+  let payload = req.body?.qr || req.body?.payload || null;
+  const force = req.body?.force === true;
+  const note = req.body?.note || "";
+  const staffWallet = (req.body?.staffWallet || req.user?.walletAddress || "").toLowerCase();
+
+  if (typeof payload === "string") {
+    try {
+      payload = JSON.parse(payload);
+    } catch {
+      return res.status(400).json({ success: false, error: "Chuỗi QR không phải JSON hợp lệ" });
+    }
+  }
+
+  if (payload) {
+    const verified = verifyPassPayload(payload);
+    if (!verified.ok) {
+      return res.status(400).json({ success: false, error: verified.error });
+    }
+    tokenId = verified.payload.tokenId;
+  }
+
+  if (!Number.isFinite(tokenId)) {
+    return res.status(400).json({ success: false, error: "Cần tokenId hoặc mã QR" });
+  }
+
+  if (payload?.wallet) {
+    const ctx = await loadTicketPassContext(tokenId);
+    if (payload.wallet !== ctx.ownerWallet) {
+      return res.status(409).json({
+        success: false,
+        error: "Ví trên QR không khớp chủ vé hiện tại",
+      });
+    }
+  }
+
+  const result = await checkInTicket({ tokenId, staffWallet, note, force });
+  if (!result.ok) {
+    return res.status(409).json({
+      success: false,
+      error: result.error,
+      data: { ticket: result.ticket, alreadyCheckedIn: true },
+    });
+  }
+
+  res.json({
+    success: true,
+    data: {
+      checkedIn: true,
+      ticket: result.ticket,
+      message: `Check-in thành công vé #${tokenId}`,
+    },
+  });
 });

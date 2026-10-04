@@ -144,6 +144,11 @@ export async function generateInvoicePdf(invoice) {
     const desc = [
       item.eventTitle || "Vé sự kiện",
       `Hạng: ${item.tierName || ""} · eventChainId ${item.eventChainId ?? ""}`,
+      item.seatLabel || item.seatId
+        ? `Ghế ${item.seatLabel || item.seatId}${
+            item.zoneLabel || item.zoneCode ? ` · khu ${item.zoneLabel || item.zoneCode}` : ""
+          } (1 ghế = 1 vé)`
+        : "",
       item.tokenIds?.length ? `Token NFT: #${item.tokenIds.join(", #")}` : "",
       item.eventLocation ? `Địa điểm: ${item.eventLocation}` : "",
       `Dịch vụ vui chơi giải trí — GTGT ${item.ratePercent ?? 10}%`,

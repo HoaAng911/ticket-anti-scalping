@@ -14,6 +14,7 @@ import {
   CheckCircle2,
   Sparkles,
   FileText,
+  Unplug,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useWallet } from "../../hooks/useWallet.js";
@@ -21,7 +22,8 @@ import { getEvents, getListings, getMyTickets } from "../../services/api.js";
 
 export default function UserPortal() {
   const { user, login: authLogin, register: authRegister, logout, bindWallet } = useAuth();
-  const { account, connect, connecting, wrongNetwork, ensureNetwork, networkName } = useWallet();
+  const { account, connect, disconnect, connecting, disconnecting, wrongNetwork, ensureNetwork, networkName } =
+    useWallet();
   const [mode, setMode] = useState("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -181,11 +183,22 @@ export default function UserPortal() {
                 <p className="user-meta" style={{ margin: 0, wordBreak: "break-all" }}>
                   {account}
                 </p>
-                {wrongNetwork && (
-                  <button type="button" className="user-btn secondary" onClick={ensureNetwork}>
-                    Chuyển sang {networkName}
+                <div className="user-btn-row">
+                  {wrongNetwork ? (
+                    <button type="button" className="user-btn secondary" onClick={ensureNetwork}>
+                      Chuyển sang {networkName}
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="user-btn ghost"
+                    onClick={disconnect}
+                    disabled={disconnecting}
+                  >
+                    <Unplug size={16} />
+                    {disconnecting ? "Đang ngắt…" : "Ngắt kết nối"}
                   </button>
-                )}
+                </div>
               </>
             ) : (
               <button type="button" className="user-btn teal" onClick={connect} disabled={connecting}>

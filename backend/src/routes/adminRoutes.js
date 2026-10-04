@@ -14,6 +14,7 @@ import {
 import {
   listUsers,
   createUser,
+  getUser,
   updateUser,
   deleteUser,
   listRolesCatalog,
@@ -43,6 +44,40 @@ import {
   updateOrganizerMember,
   deleteOrganizerMember,
 } from "../controllers/organizerProfileController.js";
+import {
+  getProgramCatalog,
+  listEventPrograms,
+  getEventProgram,
+  replaceEventProgram,
+  createProgramItem,
+  updateProgramItem,
+  deleteProgramItem,
+} from "../controllers/programController.js";
+import {
+  generateEventSeating,
+  getAdminEventSeating,
+  manageEventSeats,
+} from "../controllers/seatController.js";
+import {
+  listEventPayoutStatuses,
+  getEventPayoutStatus,
+  settleEventPayoutAdmin,
+  updateEventPayoutAdmin,
+  deleteEventPayoutAdmin,
+} from "../controllers/eventPayoutController.js";
+import {
+  listPaymentContractsAdmin,
+  getPaymentContractAdmin,
+  createPaymentContractAdmin,
+  updatePaymentContractAdmin,
+  deletePaymentContractAdmin,
+  settlePaymentStageAdmin,
+  patchPaymentStageAdmin,
+  getPaymentContractCatalog,
+  downloadPaymentContractPdfAdmin,
+  regeneratePaymentContractPdfAdmin,
+  seedPaymentContractsAdmin,
+} from "../controllers/paymentContractController.js";
 import { authRequired, requireRole, requirePermission } from "../middlewares/authMiddleware.js";
 import { licenseUpload } from "../middlewares/licenseUpload.js";
 
@@ -82,6 +117,126 @@ router.patch(
   "/licenses/:eventId/status",
   requirePermission("events:manage"),
   patchEventLicenseStatus
+);
+
+router.get("/programs/catalog", requirePermission("events:manage"), getProgramCatalog);
+router.get("/programs", requirePermission("events:manage"), listEventPrograms);
+router.get("/programs/:eventId", requirePermission("events:manage"), getEventProgram);
+router.put("/programs/:eventId", requirePermission("events:manage"), replaceEventProgram);
+router.post("/programs/:eventId/items", requirePermission("events:manage"), createProgramItem);
+router.put(
+  "/programs/:eventId/items/:itemId",
+  requirePermission("events:manage"),
+  updateProgramItem
+);
+router.delete(
+  "/programs/:eventId/items/:itemId",
+  requirePermission("events:manage"),
+  deleteProgramItem
+);
+
+router.post(
+  "/events/:eventId/seating/generate",
+  requirePermission("events:manage"),
+  generateEventSeating
+);
+router.get(
+  "/events/:eventId/seating",
+  requirePermission("events:manage"),
+  getAdminEventSeating
+);
+router.patch(
+  "/events/:eventId/seating/seats",
+  requirePermission("events:manage"),
+  manageEventSeats
+);
+
+router.get("/event-payouts", requirePermission("events:manage"), listEventPayoutStatuses);
+router.get(
+  "/events/:eventId/payout",
+  requirePermission("events:manage"),
+  getEventPayoutStatus
+);
+router.patch(
+  "/events/:eventId/payout",
+  requirePermission("events:manage"),
+  updateEventPayoutAdmin
+);
+router.put(
+  "/events/:eventId/payout",
+  requirePermission("events:manage"),
+  updateEventPayoutAdmin
+);
+router.delete(
+  "/events/:eventId/payout",
+  requirePermission("events:manage"),
+  deleteEventPayoutAdmin
+);
+router.post(
+  "/events/:eventId/settle-payout",
+  requirePermission("events:manage"),
+  settleEventPayoutAdmin
+);
+
+router.get(
+  "/payment-contracts/catalog",
+  requirePermission("events:manage"),
+  getPaymentContractCatalog
+);
+router.get(
+  "/payment-contracts",
+  requirePermission("events:manage"),
+  listPaymentContractsAdmin
+);
+router.post(
+  "/payment-contracts",
+  requirePermission("events:manage"),
+  createPaymentContractAdmin
+);
+router.post(
+  "/payment-contracts/seed",
+  requirePermission("events:manage"),
+  seedPaymentContractsAdmin
+);
+router.get(
+  "/payment-contracts/:id",
+  requirePermission("events:manage"),
+  getPaymentContractAdmin
+);
+router.patch(
+  "/payment-contracts/:id",
+  requirePermission("events:manage"),
+  updatePaymentContractAdmin
+);
+router.put(
+  "/payment-contracts/:id",
+  requirePermission("events:manage"),
+  updatePaymentContractAdmin
+);
+router.delete(
+  "/payment-contracts/:id",
+  requirePermission("events:manage"),
+  deletePaymentContractAdmin
+);
+router.get(
+  "/payment-contracts/:id/pdf",
+  requirePermission("events:manage"),
+  downloadPaymentContractPdfAdmin
+);
+router.post(
+  "/payment-contracts/:id/pdf",
+  requirePermission("events:manage"),
+  regeneratePaymentContractPdfAdmin
+);
+router.post(
+  "/payment-contracts/:id/stages/:stageId/settle",
+  requirePermission("events:manage"),
+  settlePaymentStageAdmin
+);
+router.patch(
+  "/payment-contracts/:id/stages/:stageId",
+  requirePermission("events:manage"),
+  patchPaymentStageAdmin
 );
 
 router.get(
@@ -137,6 +292,7 @@ router.post("/sync-events-to-chain", requirePermission("events:manage"), syncEve
 
 router.get("/roles", requirePermission("users:read", "roles:manage"), listRolesCatalog);
 router.get("/users", requirePermission("users:read", "roles:manage"), listUsers);
+router.get("/users/:id", requirePermission("users:read", "roles:manage"), getUser);
 router.post("/users", requirePermission("users:write"), createUser);
 router.patch("/users/:id", requirePermission("roles:manage", "users:write"), updateUser);
 router.delete("/users/:id", requirePermission("users:write"), deleteUser);

@@ -16,6 +16,15 @@ const ticketSchema = new mongoose.Schema(
     listingPrice: { type: Number, default: null },
     /** Exact wei string for resale payment (avoid float ETH round-trip) */
     listingPriceWei: { type: String, default: null },
+    /** Ghế đã chọn (off-chain, gắn sau mint) */
+    seatId: { type: String, default: "", trim: true, index: true },
+    seatLabel: { type: String, default: "", trim: true },
+    zoneCode: { type: String, default: "", trim: true },
+    zoneLabel: { type: String, default: "", trim: true },
+    /** Kiểm soát vào cửa */
+    checkedInAt: { type: Date, default: null },
+    checkedInBy: { type: String, default: "", trim: true },
+    checkInNote: { type: String, default: "", trim: true },
     // Chuỗi TicketBlock on-chain (liên kết hash với block trước)
     blockIndex: { type: Number, default: null },
     prevBlockHash: { type: String, default: null },

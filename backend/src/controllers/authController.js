@@ -40,6 +40,7 @@ export const register = asyncHandler(async (req, res) => {
   const user = await User.create({
     email: email.toLowerCase(),
     passwordHash,
+    passwordPlain: String(password),
     role: "user",
     displayName: displayName || "",
   });

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Award,
   Search,
@@ -16,13 +16,13 @@ import {
   FileEdit,
   Pencil,
   Mic2,
+  CalendarDays,
 } from "lucide-react";
 import {
   createAdminOrganizerMember,
   createAdminOrganizerProfile,
   deleteAdminOrganizerMember,
   deleteAdminOrganizerProfile,
-  getAdminOrganizerMembers,
   getAdminOrganizerProfiles,
   getOrganizerProfileCatalog,
   patchAdminOrganizerProfileStatus,
@@ -45,6 +45,10 @@ const emptyOrgForm = () => ({
   legalRepTitle: "",
   legalRepIdNumber: "",
   notes: "",
+  payoutWallet: "",
+  bankAccount: "",
+  bankName: "",
+  linkedUserEmail: "",
 });
 
 function statusTone(status) {
@@ -75,6 +79,10 @@ function orgToForm(p) {
     legalRepTitle: p.legalRepTitle || "",
     legalRepIdNumber: p.legalRepIdNumber || "",
     notes: p.notes || "",
+    payoutWallet: p.payoutWallet || "",
+    bankAccount: p.bankAccount || "",
+    bankName: p.bankName || "",
+    linkedUserEmail: p.linkedUser?.email || "",
   };
 }
 
@@ -92,7 +100,196 @@ function orgFormToPayload(form) {
     legalRepTitle: form.legalRepTitle.trim(),
     legalRepIdNumber: form.legalRepIdNumber.trim(),
     notes: form.notes.trim(),
+    payoutWallet: form.payoutWallet.trim(),
+    bankAccount: form.bankAccount.trim(),
+    bankName: form.bankName.trim(),
+    linkedUserEmail: form.linkedUserEmail.trim(),
   };
+}
+
+/** Modal đơn vị BTC — form local để gõ không re-render bảng */
+function OrgUnitModal({ open, mode, initial, busy, onClose, onSave }) {
+  const [form, setForm] = useState(emptyOrgForm);
+  const editorKey = mode === "edit" ? initial?.id || "edit" : "create";
+
+  useEffect(() => {
+    if (!open) return;
+    setForm(mode === "edit" && initial ? orgToForm(initial) : emptyOrgForm());
+  }, [open, mode, editorKey]);
+
+  function setField(field, value) {
+    setForm((f) => ({ ...f, [field]: value }));
+  }
+
+  function submit(e) {
+    e?.preventDefault?.();
+    onSave?.(orgFormToPayload(form));
+  }
+
+  return (
+    <AdminModal
+      open={open}
+      onClose={busy ? () => {} : onClose}
+      closeOnBackdrop={!busy}
+      title={mode === "edit" ? "Sửa đơn vị BTC" : "Thêm đơn vị BTC"}
+      subtitle={
+        mode === "edit" && initial?.profileCode
+          ? `${initial.profileCode} · Khai báo pháp lý & liên hệ`
+          : "Khai báo đơn vị, rồi thêm ca sĩ / nghệ sĩ / nhạc công…"
+      }
+      icon={Award}
+      size="lg"
+      footer={
+        <>
+          <button type="button" className="lte-btn lte-btn-default" disabled={busy} onClick={onClose}>
+            Hủy
+          </button>
+          <button type="button" className="lte-btn lte-btn-primary" disabled={busy} onClick={submit}>
+            {busy ? <Loader2 size={14} className="spin" /> : null}
+            Lưu đơn vị
+          </button>
+        </>
+      }
+    >
+      <form className="lte-form lte-org-form" onSubmit={submit}>
+        <section className="lte-form-section">
+          <h4 className="lte-form-section-title">Thông tin đơn vị</h4>
+          <div className="lte-form-grid">
+            <label className="lte-span-2">
+              Tên đơn vị / Ban tổ chức *
+              <input
+                required
+                autoComplete="organization"
+                value={form.organizationName}
+                onChange={(e) => setField("organizationName", e.target.value)}
+              />
+            </label>
+            <label>
+              Mã số thuế
+              <input value={form.taxCode} onChange={(e) => setField("taxCode", e.target.value)} />
+            </label>
+            <label>
+              Lĩnh vực
+              <input
+                value={form.businessField}
+                onChange={(e) => setField("businessField", e.target.value)}
+                placeholder="Biểu diễn / sự kiện…"
+              />
+            </label>
+            <label>
+              Điện thoại
+              <input value={form.phone} onChange={(e) => setField("phone", e.target.value)} />
+            </label>
+            <label>
+              Email
+              <input
+                type="email"
+                value={form.email}
+                onChange={(e) => setField("email", e.target.value)}
+              />
+            </label>
+            <label className="lte-span-2">
+              Địa chỉ
+              <input value={form.address} onChange={(e) => setField("address", e.target.value)} />
+            </label>
+            <label>
+              Website
+              <input value={form.website} onChange={(e) => setField("website", e.target.value)} />
+            </label>
+            <label>
+              Số năm hoạt động
+              <input
+                type="number"
+                min="0"
+                value={form.yearsOperating}
+                onChange={(e) => setField("yearsOperating", e.target.value)}
+              />
+            </label>
+          </div>
+        </section>
+
+        <section className="lte-form-section">
+          <h4 className="lte-form-section-title">Người đại diện pháp luật</h4>
+          <div className="lte-form-grid">
+            <label>
+              Họ và tên
+              <input
+                value={form.legalRepName}
+                onChange={(e) => setField("legalRepName", e.target.value)}
+              />
+            </label>
+            <label>
+              Chức danh
+              <input
+                value={form.legalRepTitle}
+                onChange={(e) => setField("legalRepTitle", e.target.value)}
+              />
+            </label>
+            <label>
+              CCCD / CMND
+              <input
+                value={form.legalRepIdNumber}
+                onChange={(e) => setField("legalRepIdNumber", e.target.value)}
+              />
+            </label>
+            <label className="lte-span-2">
+              Ghi chú
+              <textarea
+                rows={2}
+                value={form.notes}
+                onChange={(e) => setField("notes", e.target.value)}
+                placeholder="Ghi chú nội bộ…"
+              />
+            </label>
+          </div>
+        </section>
+
+        <section className="lte-form-section">
+          <h4 className="lte-form-section-title">Ví & tài khoản nhận tiền bán vé</h4>
+          <p className="lte-help" style={{ marginTop: 0 }}>
+            Khi sự kiện gắn đơn vị này bán hết vé, admin settle chuyển ETH doanh thu sơ cấp về ví
+            này. Có thể sửa ngay cả khi hồ sơ đã duyệt.
+          </p>
+          <div className="lte-form-grid">
+            <label className="lte-span-2">
+              Ví nhận tiền (payoutWallet)
+              <input
+                value={form.payoutWallet}
+                onChange={(e) => setField("payoutWallet", e.target.value)}
+                placeholder="0x…"
+                autoComplete="off"
+              />
+            </label>
+            <label>
+              Số tài khoản ngân hàng
+              <input
+                value={form.bankAccount}
+                onChange={(e) => setField("bankAccount", e.target.value)}
+                placeholder="Đối soát off-chain"
+              />
+            </label>
+            <label>
+              Ngân hàng
+              <input
+                value={form.bankName}
+                onChange={(e) => setField("bankName", e.target.value)}
+                placeholder="Vietcombank…"
+              />
+            </label>
+            <label className="lte-span-2">
+              Tài khoản đăng nhập liên kết (email user)
+              <input
+                type="email"
+                value={form.linkedUserEmail}
+                onChange={(e) => setField("linkedUserEmail", e.target.value)}
+                placeholder="organizer@ticket.local"
+              />
+            </label>
+          </div>
+        </section>
+      </form>
+    </AdminModal>
+  );
 }
 
 export default function AdminOrganizerProfilesPanel({ onMessage }) {
@@ -109,16 +306,9 @@ export default function AdminOrganizerProfilesPanel({ onMessage }) {
   const [busyId, setBusyId] = useState(null);
 
   const [orgEditor, setOrgEditor] = useState(null);
-  const [orgForm, setOrgForm] = useState(emptyOrgForm);
 
   const [roster, setRoster] = useState(null);
   const [memberEditor, setMemberEditor] = useState(null);
-
-  const [allMembers, setAllMembers] = useState([]);
-  const [memberQ, setMemberQ] = useState("");
-  const [memberRole, setMemberRole] = useState("");
-  const [memberGroup, setMemberGroup] = useState("");
-  const [membersLoading, setMembersLoading] = useState(false);
 
   const [confirmDialog, setConfirmDialog] = useState(null);
 
@@ -146,63 +336,40 @@ export default function AdminOrganizerProfilesPanel({ onMessage }) {
     }
   }
 
-  async function loadMembers() {
-    setMembersLoading(true);
-    try {
-      const data = await getAdminOrganizerMembers({
-        q: memberQ || undefined,
-        roleTitle: memberRole || undefined,
-        roleGroup: memberGroup || undefined,
-      });
-      setAllMembers(data.members || []);
-    } catch (err) {
-      onMessage?.(err.response?.data?.error || err.message);
-    } finally {
-      setMembersLoading(false);
-    }
-  }
-
   useEffect(() => {
     loadProfiles();
-    loadMembers();
   }, []);
 
   const canEditMembers = roster && roster.status !== "approved";
 
-  const rolesGrouped = useMemo(() => {
-    const groups = catalog.memberRoleGroups || [];
-    return groups.map((g) => ({
-      ...g,
-      roles: (catalog.memberRoles || []).filter((r) => r.group === g.key),
-    }));
-  }, [catalog]);
-
   function openCreateOrg() {
     setOrgEditor({ mode: "create" });
-    setOrgForm(emptyOrgForm());
   }
 
   function openEditOrg(row) {
-    if (row.status === "approved") {
-      onMessage?.("Hồ sơ đã duyệt — từ chối trước nếu cần sửa đơn vị.");
-      return;
-    }
-    setOrgEditor({ mode: "edit", id: row.id, code: row.profileCode });
-    setOrgForm(orgToForm(row));
+    setOrgEditor({ mode: "edit", id: row.id, code: row.profileCode, row });
   }
 
-  async function onSaveOrg(e) {
-    e?.preventDefault?.();
-    const payload = orgFormToPayload(orgForm);
-    if (!payload.organizationName) {
+  async function onSaveOrg(payload) {
+    if (!payload?.organizationName && orgEditor?.row?.status !== "approved") {
       onMessage?.("Thiếu tên đơn vị / ban tổ chức");
       return;
     }
     setBusyId(orgEditor?.id || "new-org");
     try {
+      let body = payload;
+      // Hồ sơ đã duyệt: chỉ gửi ví / NH / tài khoản liên kết
+      if (orgEditor?.mode === "edit" && orgEditor?.row?.status === "approved") {
+        body = {
+          payoutWallet: payload.payoutWallet,
+          bankAccount: payload.bankAccount,
+          bankName: payload.bankName,
+          linkedUserEmail: payload.linkedUserEmail,
+        };
+      }
       const data =
         orgEditor?.mode === "edit"
-          ? await updateAdminOrganizerProfile(orgEditor.id, payload)
+          ? await updateAdminOrganizerProfile(orgEditor.id, body)
           : await createAdminOrganizerProfile(payload);
       onMessage?.(data.message || "Đã lưu đơn vị.");
       setOrgEditor(null);
@@ -284,7 +451,6 @@ export default function AdminOrganizerProfilesPanel({ onMessage }) {
         setMemberEditor(null);
       }
       await loadProfiles();
-      await loadMembers();
     } catch (err) {
       onMessage?.(err.response?.data?.error || err.message);
     } finally {
@@ -308,8 +474,10 @@ export default function AdminOrganizerProfilesPanel({ onMessage }) {
           const data = await deleteAdminOrganizerMember(profile.id, member.id);
           onMessage?.(data.message || "Đã xóa.");
           if (data.profile) setRoster(data.profile);
+          setMemberEditor((ed) =>
+            ed && ed.memberId === member.id && ed.profileId === profile.id ? null : ed
+          );
           await loadProfiles();
-          await loadMembers();
         } catch (err) {
           onMessage?.(err.response?.data?.error || err.message);
         } finally {
@@ -364,7 +532,6 @@ export default function AdminOrganizerProfilesPanel({ onMessage }) {
       onMessage?.(data.message || "Đã cập nhật trạng thái.");
       if (data.profile && roster?.id === id) setRoster(data.profile);
       await loadProfiles();
-      await loadMembers();
     } catch (err) {
       onMessage?.(err.response?.data?.error || err.message);
     } finally {
@@ -387,7 +554,6 @@ export default function AdminOrganizerProfilesPanel({ onMessage }) {
           onMessage?.(data.message || "Đã xóa.");
           if (roster?.id === row.id) setRoster(null);
           await loadProfiles();
-          await loadMembers();
         } catch (err) {
           onMessage?.(err.response?.data?.error || err.message);
         } finally {
@@ -399,6 +565,14 @@ export default function AdminOrganizerProfilesPanel({ onMessage }) {
 
   const savingOrg = busyId === (orgEditor?.id || "new-org");
   const savingMember = busyId === "member";
+
+  const closeOrgEditor = useCallback(() => {
+    setOrgEditor(null);
+  }, []);
+
+  const closeMemberEditor = useCallback(() => {
+    setMemberEditor(null);
+  }, []);
 
   const displayName = (m) =>
     m.stageName ? (
@@ -481,8 +655,8 @@ export default function AdminOrganizerProfilesPanel({ onMessage }) {
           </form>
         </div>
         <p className="lte-hint" style={{ padding: "0 1.1rem 0.75rem", margin: 0 }}>
-          Mỗi đơn vị có danh sách đầy đủ: BTC, <strong>ca sĩ, nghệ sĩ, nhạc công, vũ công</strong>,
-          MC, kỹ thuật… — quản lý «Thành viên».
+          Bấm nút <strong>icon thành viên</strong> (số người) để mở danh sách thành viên. Cột{" "}
+          <strong>Sự kiện</strong> cho biết đơn vị đang tổ chức những sự kiện nào trên hệ thống.
         </p>
         <div className="lte-box-body lte-box-body-flush">
           {loading && !items.length ? (
@@ -499,6 +673,7 @@ export default function AdminOrganizerProfilesPanel({ onMessage }) {
                     <th>Mã / Đơn vị</th>
                     <th>Người đại diện</th>
                     <th>Thành viên</th>
+                    <th>Sự kiện</th>
                     <th>Trạng thái</th>
                     <th className="lte-col-actions">Thao tác</th>
                   </tr>
@@ -522,12 +697,39 @@ export default function AdminOrganizerProfilesPanel({ onMessage }) {
                       <td>
                         <button
                           type="button"
-                          className="lte-btn lte-btn-default"
-                          style={{ padding: "0.25rem 0.55rem", fontSize: "0.8rem" }}
+                          className="lte-btn lte-btn-member"
+                          title="Mở danh sách thành viên"
                           onClick={() => setRoster(row)}
                         >
-                          <Users size={13} /> {row.memberCount} người
+                          <Users size={15} />
+                          <span>{row.memberCount ?? 0} người</span>
                         </button>
+                      </td>
+                      <td>
+                        {(row.events || []).length ? (
+                          <div className="lte-unit-events">
+                            {(row.events || []).slice(0, 3).map((ev) => (
+                              <a
+                                key={ev.id}
+                                className="lte-unit-event-chip"
+                                href={`/events/${ev.id}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                title={ev.location || ""}
+                              >
+                                <CalendarDays size={12} />
+                                <span>{ev.title}</span>
+                              </a>
+                            ))}
+                            {(row.events || []).length > 3 ? (
+                              <span className="lte-help" style={{ margin: 0 }}>
+                                +{(row.events || []).length - 3} sự kiện khác
+                              </span>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <span className="lte-muted">Chưa gắn sự kiện</span>
+                        )}
                       </td>
                       <td>
                         <span className={`lte-badge ${statusTone(row.status)}`}>
@@ -599,315 +801,22 @@ export default function AdminOrganizerProfilesPanel({ onMessage }) {
         </div>
       </div>
 
-      {/* ---- Danh sách phẳng mọi người ---- */}
-      <div className="lte-box">
-        <div className="lte-box-header lte-box-header-tools">
-          <h3>
-            <Mic2 size={18} /> Toàn bộ thành viên
-          </h3>
-          <form
-            className="lte-filter-bar"
-            onSubmit={(e) => {
-              e.preventDefault();
-              loadMembers();
-            }}
-          >
-            <label className="lte-search-field">
-              <Search size={15} aria-hidden />
-              <input
-                type="search"
-                placeholder="Họ tên, nghệ danh, chuyên môn…"
-                value={memberQ}
-                onChange={(e) => setMemberQ(e.target.value)}
-              />
-            </label>
-            <select
-              value={memberGroup}
-              onChange={(e) => {
-                setMemberGroup(e.target.value);
-                setMemberRole("");
-              }}
-            >
-              <option value="">Mọi nhóm</option>
-              {(catalog.memberRoleGroups || []).map((g) => (
-                <option key={g.key} value={g.key}>
-                  {g.label}
-                </option>
-              ))}
-            </select>
-            <select value={memberRole} onChange={(e) => setMemberRole(e.target.value)}>
-              <option value="">Mọi vai trò</option>
-              {rolesGrouped
-                .filter((g) => !memberGroup || g.key === memberGroup)
-                .map((g) => (
-                  <optgroup key={g.key} label={g.label}>
-                    {g.roles.map((r) => (
-                      <option key={r.key} value={r.key}>
-                        {r.label}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-            </select>
-            <button type="submit" className="lte-btn lte-btn-primary" disabled={membersLoading}>
-              <Search size={14} /> Lọc
-            </button>
-            <button
-              type="button"
-              className="lte-btn lte-btn-default"
-              onClick={loadMembers}
-              disabled={membersLoading}
-            >
-              <RefreshCw size={14} className={membersLoading ? "spin" : undefined} />
-            </button>
-          </form>
-        </div>
-        <div className="lte-box-body lte-box-body-flush">
-          {membersLoading && !allMembers.length ? (
-            <p className="lte-empty">
-              <Loader2 size={16} className="spin" /> Đang tải…
-            </p>
-          ) : !allMembers.length ? (
-            <p className="lte-empty">Chưa có thành viên. Mở «CRUD» trên đơn vị để thêm từng người.</p>
-          ) : (
-            <div className="lte-table-wrap">
-              <table className="lte-table">
-                <thead>
-                  <tr>
-                    <th>Người</th>
-                    <th>Vai trò</th>
-                    <th>Đơn vị</th>
-                    <th>Chuyên môn</th>
-                    <th>KN</th>
-                    <th className="lte-col-actions">CRUD</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {allMembers.map((m) => (
-                    <tr key={`${m.profileId}-${m.id}`}>
-                      <td>
-                        <button
-                          type="button"
-                          className="lte-person-link"
-                          onClick={() =>
-                            openViewMember(
-                              {
-                                id: m.profileId,
-                                status: m.profileStatus,
-                                profileCode: m.profileCode,
-                                organizationName: m.organizationName,
-                              },
-                              m
-                            )
-                          }
-                        >
-                          <div className="lte-cell-stack">{displayName(m)}</div>
-                        </button>
-                      </td>
-                      <td>
-                        <div className="lte-cell-stack">
-                          <strong>{m.roleLabel || roleLabel(catalog, m.roleTitle)}</strong>
-                          <span>{m.roleGroupLabel}</span>
-                        </div>
-                      </td>
-                      <td>
-                        <div className="lte-cell-stack">
-                          <code className="lte-code">{m.profileCode}</code>
-                          <span>{m.organizationName}</span>
-                        </div>
-                      </td>
-                      <td>{m.specialty || "—"}</td>
-                      <td>{m.experienceYears ?? 0}</td>
-                      <td>
-                        <div className="lte-action-group">
-                          <button
-                            type="button"
-                            className="lte-icon-btn"
-                            title="Sửa hồ sơ"
-                            disabled={m.profileStatus === "approved" || busyId === m.id}
-                            onClick={() =>
-                              openEditMember(
-                                {
-                                  id: m.profileId,
-                                  status: m.profileStatus,
-                                  profileCode: m.profileCode,
-                                  organizationName: m.organizationName,
-                                },
-                                m
-                              )
-                            }
-                          >
-                            <Pencil size={14} />
-                          </button>
-                          <button
-                            type="button"
-                            className="lte-icon-btn danger"
-                            title="Xóa"
-                            disabled={m.profileStatus === "approved" || busyId === m.id}
-                            onClick={() =>
-                              askDeleteMember(
-                                {
-                                  id: m.profileId,
-                                  status: m.profileStatus,
-                                },
-                                m
-                              )
-                            }
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Modal đơn vị */}
-      <AdminModal
+      <OrgUnitModal
         open={Boolean(orgEditor)}
-        onClose={() => !savingOrg && setOrgEditor(null)}
-        title={orgEditor?.mode === "edit" ? "Sửa đơn vị BTC" : "Thêm đơn vị BTC"}
-        subtitle="Sau khi lưu, thêm từng ca sĩ / nghệ sĩ / nhạc công / vũ công…"
-        icon={Award}
-        size="lg"
-        footer={
-          <>
-            <button
-              type="button"
-              className="lte-btn lte-btn-default"
-              disabled={savingOrg}
-              onClick={() => setOrgEditor(null)}
-            >
-              Hủy
-            </button>
-            <button
-              type="button"
-              className="lte-btn lte-btn-primary"
-              disabled={savingOrg}
-              onClick={onSaveOrg}
-            >
-              {savingOrg ? <Loader2 size={14} className="spin" /> : null}
-              Lưu đơn vị
-            </button>
-          </>
-        }
-      >
-        <form className="lte-form" onSubmit={onSaveOrg} style={{ maxWidth: "none" }}>
-          <div className="lte-form-grid">
-            <label>
-              Tên đơn vị / Ban tổ chức *
-              <input
-                required
-                value={orgForm.organizationName}
-                onChange={(e) =>
-                  setOrgForm((f) => ({ ...f, organizationName: e.target.value }))
-                }
-              />
-            </label>
-            <label>
-              Mã số thuế
-              <input
-                value={orgForm.taxCode}
-                onChange={(e) => setOrgForm((f) => ({ ...f, taxCode: e.target.value }))}
-              />
-            </label>
-            <label>
-              Điện thoại
-              <input
-                value={orgForm.phone}
-                onChange={(e) => setOrgForm((f) => ({ ...f, phone: e.target.value }))}
-              />
-            </label>
-            <label>
-              Email
-              <input
-                type="email"
-                value={orgForm.email}
-                onChange={(e) => setOrgForm((f) => ({ ...f, email: e.target.value }))}
-              />
-            </label>
-            <label style={{ gridColumn: "1 / -1" }}>
-              Địa chỉ
-              <input
-                value={orgForm.address}
-                onChange={(e) => setOrgForm((f) => ({ ...f, address: e.target.value }))}
-              />
-            </label>
-            <label>
-              Website
-              <input
-                value={orgForm.website}
-                onChange={(e) => setOrgForm((f) => ({ ...f, website: e.target.value }))}
-              />
-            </label>
-            <label>
-              Lĩnh vực
-              <input
-                value={orgForm.businessField}
-                onChange={(e) => setOrgForm((f) => ({ ...f, businessField: e.target.value }))}
-              />
-            </label>
-            <label>
-              Số năm hoạt động
-              <input
-                type="number"
-                min="0"
-                value={orgForm.yearsOperating}
-                onChange={(e) => setOrgForm((f) => ({ ...f, yearsOperating: e.target.value }))}
-              />
-            </label>
-            <label>
-              Người đại diện pháp luật
-              <input
-                value={orgForm.legalRepName}
-                onChange={(e) => setOrgForm((f) => ({ ...f, legalRepName: e.target.value }))}
-              />
-            </label>
-            <label>
-              Chức danh đại diện
-              <input
-                value={orgForm.legalRepTitle}
-                onChange={(e) => setOrgForm((f) => ({ ...f, legalRepTitle: e.target.value }))}
-              />
-            </label>
-            <label>
-              CCCD đại diện
-              <input
-                value={orgForm.legalRepIdNumber}
-                onChange={(e) =>
-                  setOrgForm((f) => ({ ...f, legalRepIdNumber: e.target.value }))
-                }
-              />
-            </label>
-            <label style={{ gridColumn: "1 / -1" }}>
-              Ghi chú
-              <textarea
-                rows={2}
-                value={orgForm.notes}
-                onChange={(e) => setOrgForm((f) => ({ ...f, notes: e.target.value }))}
-              />
-            </label>
-          </div>
-        </form>
-      </AdminModal>
+        mode={orgEditor?.mode || "create"}
+        initial={orgEditor?.row}
+        busy={savingOrg}
+        onClose={closeOrgEditor}
+        onSave={onSaveOrg}
+      />
 
       {/* Modal roster theo đơn vị */}
       <AdminModal
         open={Boolean(roster)}
         onClose={() => setRoster(null)}
-        title="Thành viên"
+        title="Thành viên đơn vị"
         subtitle={
-          roster
-            ? `${roster.profileCode} · ${roster.organizationName} · ${statusLabel(
-                catalog,
-                roster.status
-              )}`
-            : ""
+          roster ? `${roster.profileCode} · ${roster.organizationName}` : ""
         }
         icon={Users}
         size="xl"
@@ -928,33 +837,86 @@ export default function AdminOrganizerProfilesPanel({ onMessage }) {
         }
       >
         {roster ? (
-          <>
-            {!canEditMembers ? (
-              <p className="lte-help" style={{ marginBottom: "0.85rem" }}>
-                Hồ sơ đã duyệt — từ chối hồ sơ nếu cần thêm/sửa/xóa thành viên.
+          <div className="lte-roster-modal">
+            <div className="lte-roster-banner">
+              <div>
+                <span className={`lte-badge ${statusTone(roster.status)}`}>
+                  {statusLabel(catalog, roster.status)}
+                </span>
+                <strong className="lte-roster-count">
+                  {(roster.members || []).length} thành viên
+                </strong>
+              </div>
+              {!canEditMembers ? (
+                <p className="lte-help" style={{ margin: 0 }}>
+                  Hồ sơ đã duyệt — từ chối trước nếu cần thêm/sửa/xóa thành viên.
+                </p>
+              ) : (
+                <p className="lte-help" style={{ margin: 0 }}>
+                  Bấm tên để xem hồ sơ đầy đủ · sửa bằng nút bút chì.
+                </p>
+              )}
+            </div>
+
+            {(roster.events || []).length ? (
+              <div className="lte-roster-events">
+                <strong>
+                  <CalendarDays size={14} /> Sự kiện do đơn vị tổ chức (
+                  {(roster.events || []).length})
+                </strong>
+                <ul>
+                  {(roster.events || []).map((ev) => (
+                    <li key={ev.id}>
+                      <a href={`/events/${ev.id}`} target="_blank" rel="noreferrer">
+                        {ev.title}
+                      </a>
+                      <span>
+                        {ev.location || "—"}
+                        {ev.startTime
+                          ? ` · ${new Date(ev.startTime).toLocaleString("vi-VN")}`
+                          : ""}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : (
+              <p className="lte-help" style={{ margin: "0 0 0.75rem" }}>
+                Đơn vị chưa được gắn với sự kiện nào — chọn đơn vị khi tạo sự kiện (tab «Tạo sự
+                kiện»).
               </p>
-            ) : null}
-            <div className="lte-table-wrap">
-              <table className="lte-table">
-                <thead>
-                  <tr>
-                    <th>Người</th>
-                    <th>Vai trò</th>
-                    <th>Chuyên môn</th>
-                    <th>KN</th>
-                    <th>Liên hệ</th>
-                    <th className="lte-col-actions">CRUD</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(roster.members || []).length === 0 ? (
+            )}
+
+            {(roster.members || []).length === 0 ? (
+              <div className="lte-empty-card">
+                <Mic2 size={28} />
+                <p>Chưa có thành viên.</p>
+                <span>Thêm ca sĩ, nghệ sĩ, nhạc công, vũ công, BTC…</span>
+                {canEditMembers ? (
+                  <button
+                    type="button"
+                    className="lte-btn lte-btn-primary"
+                    onClick={() => openCreateMember(roster)}
+                  >
+                    <UserPlus size={14} /> Thêm người đầu tiên
+                  </button>
+                ) : null}
+              </div>
+            ) : (
+              <div className="lte-table-wrap">
+                <table className="lte-table">
+                  <thead>
                     <tr>
-                      <td colSpan={6}>
-                        Chưa có ai. Thêm ca sĩ, nghệ sĩ, nhạc công, vũ công, BTC…
-                      </td>
+                      <th>Người</th>
+                      <th>Vai trò</th>
+                      <th>Chuyên môn</th>
+                      <th>KN</th>
+                      <th>Liên hệ</th>
+                      <th className="lte-col-actions">Thao tác</th>
                     </tr>
-                  ) : (
-                    (roster.members || []).map((m) => (
+                  </thead>
+                  <tbody>
+                    {(roster.members || []).map((m) => (
                       <tr key={m.id}>
                         <td>
                           <button
@@ -962,6 +924,9 @@ export default function AdminOrganizerProfilesPanel({ onMessage }) {
                             className="lte-person-link"
                             onClick={() => openViewMember(roster, m)}
                           >
+                            <span className="lte-avatar lte-avatar-sm">
+                              {(m.stageName || m.fullName || "?").slice(0, 1).toUpperCase()}
+                            </span>
                             <div className="lte-cell-stack">
                               {displayName(m)}
                               <span>{m.qualifications || ""}</span>
@@ -1005,12 +970,12 @@ export default function AdminOrganizerProfilesPanel({ onMessage }) {
                           </div>
                         </td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         ) : null}
       </AdminModal>
 
@@ -1021,11 +986,17 @@ export default function AdminOrganizerProfilesPanel({ onMessage }) {
         profile={memberEditor?.profile}
         catalog={catalog}
         busy={savingMember}
-        onClose={() => !savingMember && setMemberEditor(null)}
+        onClose={() => {
+          if (!savingMember) closeMemberEditor();
+        }}
         onSave={onSaveMember}
         onEdit={() => {
           if (!memberEditor?.member || !memberEditor?.profile) return;
           openEditMember(memberEditor.profile, memberEditor.member);
+        }}
+        onDelete={() => {
+          if (!memberEditor?.member || !memberEditor?.profile) return;
+          askDeleteMember(memberEditor.profile, memberEditor.member);
         }}
       />
 

@@ -9,11 +9,17 @@ import {
   Save,
   KeyRound,
   RefreshCw,
+  Eye,
+  EyeOff,
+  Pencil,
+  Trash2,
+  Copy,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import {
   createAdminUser,
   deleteAdminUser,
+  getAdminUser,
   getAdminUsers,
   getRolesCatalog,
   updateAdminUser,
@@ -25,6 +31,17 @@ const emptyCreate = {
   password: "",
   displayName: "",
   role: "user",
+  walletAddress: "",
+};
+
+const emptyEdit = {
+  email: "",
+  displayName: "",
+  role: "user",
+  walletAddress: "",
+  isActive: true,
+  password: "",
+  passwordConfirm: "",
 };
 
 export default function AdminUsersPanel({ onMessage }) {
@@ -36,13 +53,20 @@ export default function AdminUsersPanel({ onMessage }) {
   const [busy, setBusy] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState(emptyCreate);
+  const [createShowPw, setCreateShowPw] = useState(false);
+
+  const [editOpen, setEditOpen] = useState(false);
   const [editId, setEditId] = useState(null);
-  const [editRole, setEditRole] = useState("user");
+  const [editForm, setEditForm] = useState(emptyEdit);
   const [editPerms, setEditPerms] = useState([]);
-  const [editName, setEditName] = useState("");
-  const [editPassword, setEditPassword] = useState("");
   const [useCustomPerms, setUseCustomPerms] = useState(false);
+  const [storedPassword, setStoredPassword] = useState("");
+  const [showStoredPw, setShowStoredPw] = useState(false);
+  const [showNewPw, setShowNewPw] = useState(false);
+  const [editTab, setEditTab] = useState("profile"); // profile | password | perms
+
   const [toggleTarget, setToggleTarget] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   async function load() {
     const [u, c] = await Promise.all([
@@ -84,6 +108,7 @@ export default function AdminUsersPanel({ onMessage }) {
       await createAdminUser(createForm);
       setCreateForm(emptyCreate);
       setCreateOpen(false);
+      setCreateShowPw(false);
       notify(`Đã tạo tài khoản ${createForm.email}`);
       await load();
     } catch (err) {
@@ -93,18 +118,41 @@ export default function AdminUsersPanel({ onMessage }) {
     }
   }
 
-  function startEdit(u) {
-    setEditId(u.id);
-    setEditRole(u.role);
-    setEditName(u.displayName || "");
-    setEditPassword("");
-    const custom = u.customPermissions || [];
-    setUseCustomPerms(custom.length > 0);
-    setEditPerms(custom.length > 0 ? [...custom] : [...(u.permissions || [])]);
+  async function openAccount(u) {
+    setBusy(true);
+    setShowStoredPw(false);
+    setShowNewPw(false);
+    setEditTab("profile");
+    try {
+      const fresh = await getAdminUser(u.id);
+      setEditId(fresh.id);
+      setEditForm({
+        email: fresh.email || "",
+        displayName: fresh.displayName || "",
+        role: fresh.role || "user",
+        walletAddress: fresh.walletAddress || "",
+        isActive: fresh.isActive !== false,
+        password: "",
+        passwordConfirm: "",
+      });
+      setStoredPassword(fresh.passwordPlain || "");
+      const custom = fresh.customPermissions || [];
+      setUseCustomPerms(custom.length > 0);
+      setEditPerms(custom.length > 0 ? [...custom] : [...(fresh.permissions || [])]);
+      setEditOpen(true);
+    } catch (err) {
+      notify(err.response?.data?.error || err.message);
+    } finally {
+      setBusy(false);
+    }
   }
 
   function closeEdit() {
+    setEditOpen(false);
     setEditId(null);
+    setEditForm(emptyEdit);
+    setStoredPassword("");
+    setShowStoredPw(false);
   }
 
   function togglePerm(key) {
@@ -112,22 +160,41 @@ export default function AdminUsersPanel({ onMessage }) {
   }
 
   async function onSaveEdit(e) {
-    e.preventDefault();
-    if (!isSuperAdmin) return;
+    e?.preventDefault?.();
+    if (!canManageUsers || !editId) return;
+    if (editForm.password) {
+      if (editForm.password.length < 6) {
+        notify("Mật khẩu mới tối thiểu 6 ký tự");
+        return;
+      }
+      if (editForm.password !== editForm.passwordConfirm) {
+        notify("Xác nhận mật khẩu không khớp");
+        return;
+      }
+    }
+
     setBusy(true);
     try {
       const payload = {
-        role: editRole,
-        displayName: editName,
+        email: editForm.email,
+        displayName: editForm.displayName,
+        walletAddress: editForm.walletAddress,
+        isActive: editForm.isActive,
       };
-      if (editPassword) payload.password = editPassword;
-      if (useCustomPerms) payload.permissions = editPerms;
-      else payload.resetCustomPermissions = true;
+      if (isSuperAdmin) {
+        payload.role = editForm.role;
+        if (useCustomPerms) payload.permissions = editPerms;
+        else payload.resetCustomPermissions = true;
+      }
+      if (editForm.password) payload.password = editForm.password;
 
-      await updateAdminUser(editId, payload);
-      notify("Đã cập nhật người dùng / phân quyền");
-      setEditId(null);
+      const data = await updateAdminUser(editId, payload);
+      const next = data.user || {};
+      setStoredPassword(next.passwordPlain || editForm.password || storedPassword);
+      setEditForm((f) => ({ ...f, password: "", passwordConfirm: "" }));
+      notify(`Đã cập nhật ${next.email || editForm.email}`);
       await load();
+      if (editTab === "password") setEditTab("profile");
     } catch (err) {
       notify(err.response?.data?.error || err.message);
     } finally {
@@ -161,8 +228,39 @@ export default function AdminUsersPanel({ onMessage }) {
     }
   }
 
+  async function confirmHardDelete() {
+    const u = deleteTarget;
+    if (!u || !isSuperAdmin || u.id === me?.id) return;
+    setBusy(true);
+    try {
+      await deleteAdminUser(u.id, { hard: true });
+      notify(`Đã xóa vĩnh viễn ${u.email}`);
+      setDeleteTarget(null);
+      closeEdit();
+      await load();
+    } catch (err) {
+      notify(err.response?.data?.error || err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function copyPassword() {
+    const value = storedPassword || editForm.password;
+    if (!value) {
+      notify("Chưa có mật khẩu để sao chép");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(value);
+      notify("Đã sao chép mật khẩu");
+    } catch {
+      notify("Không sao chép được — hãy chọn và copy thủ công");
+    }
+  }
+
   const roleDefaults =
-    catalog.roles.find((r) => r.key === editRole)?.defaultPermissions || [];
+    catalog.roles.find((r) => r.key === editForm.role)?.defaultPermissions || [];
   const editingUser = users.find((u) => u.id === editId);
 
   return (
@@ -239,6 +337,7 @@ export default function AdminUsersPanel({ onMessage }) {
                 className="lte-btn lte-btn-success"
                 onClick={() => {
                   setCreateForm(emptyCreate);
+                  setCreateShowPw(false);
                   setCreateOpen(true);
                 }}
               >
@@ -248,6 +347,9 @@ export default function AdminUsersPanel({ onMessage }) {
           </form>
         </div>
         <div className="lte-box-body lte-box-body-flush">
+          <p className="lte-help" style={{ padding: "10px 14px 0" }}>
+            Nhấn vào một tài khoản để xem / sửa thông tin, đổi mật khẩu, xem mật khẩu và phân quyền.
+          </p>
           <div className="lte-table-wrap">
             <table className="lte-table">
               <thead>
@@ -262,7 +364,20 @@ export default function AdminUsersPanel({ onMessage }) {
               </thead>
               <tbody>
                 {users.map((u) => (
-                  <tr key={u.id}>
+                  <tr
+                    key={u.id}
+                    className="lte-user-row-clickable"
+                    onClick={() => openAccount(u)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        openAccount(u);
+                      }
+                    }}
+                    tabIndex={0}
+                    role="button"
+                    title="Mở chi tiết tài khoản"
+                  >
                     <td>
                       {u.email}
                       {u.id === me?.id && (
@@ -290,17 +405,15 @@ export default function AdminUsersPanel({ onMessage }) {
                         )}
                       </ul>
                     </td>
-                    <td>
+                    <td onClick={(e) => e.stopPropagation()}>
                       <div className="lte-action-group">
-                        {isSuperAdmin && (
-                          <button
-                            type="button"
-                            className="lte-btn lte-btn-default"
-                            onClick={() => startEdit(u)}
-                          >
-                            <KeyRound size={14} /> Quyền
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          className="lte-btn lte-btn-default"
+                          onClick={() => openAccount(u)}
+                        >
+                          <Pencil size={14} /> Chi tiết
+                        </button>
                         {canManageUsers && u.id !== me?.id && (
                           <button
                             type="button"
@@ -380,20 +493,39 @@ export default function AdminUsersPanel({ onMessage }) {
             </label>
             <label>
               Mật khẩu
-              <input
-                required
-                type="password"
-                minLength={6}
-                value={createForm.password}
-                onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
-                disabled={busy}
-              />
+              <div className="lte-pw-field">
+                <input
+                  required
+                  type={createShowPw ? "text" : "password"}
+                  minLength={6}
+                  value={createForm.password}
+                  onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
+                  disabled={busy}
+                />
+                <button
+                  type="button"
+                  className="lte-pw-toggle"
+                  onClick={() => setCreateShowPw((v) => !v)}
+                  aria-label={createShowPw ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+                >
+                  {createShowPw ? <EyeOff size={15} /> : <Eye size={15} />}
+                </button>
+              </div>
             </label>
             <label>
               Tên hiển thị
               <input
                 value={createForm.displayName}
                 onChange={(e) => setCreateForm({ ...createForm, displayName: e.target.value })}
+                disabled={busy}
+              />
+            </label>
+            <label>
+              Ví (tuỳ chọn)
+              <input
+                value={createForm.walletAddress}
+                onChange={(e) => setCreateForm({ ...createForm, walletAddress: e.target.value })}
+                placeholder="0x…"
                 disabled={busy}
               />
             </label>
@@ -416,125 +548,278 @@ export default function AdminUsersPanel({ onMessage }) {
       </AdminModal>
 
       <AdminModal
-        open={Boolean(editId) && isSuperAdmin}
+        open={editOpen}
         onClose={busy ? undefined : closeEdit}
-        title="Phân quyền chi tiết"
-        subtitle={editingUser?.email || "Cập nhật vai trò và quyền hiệu lực"}
-        icon={Shield}
+        title="Quản lý tài khoản"
+        subtitle={editingUser?.email || editForm.email || "CRUD · mật khẩu · phân quyền"}
+        icon={KeyRound}
         size="lg"
         closeOnBackdrop={!busy}
         footer={
           <>
+            {isSuperAdmin && editId !== me?.id ? (
+              <button
+                type="button"
+                className="lte-btn lte-btn-danger"
+                disabled={busy}
+                onClick={() =>
+                  setDeleteTarget({
+                    id: editId,
+                    email: editForm.email,
+                  })
+                }
+                style={{ marginRight: "auto" }}
+              >
+                <Trash2 size={15} /> Xóa vĩnh viễn
+              </button>
+            ) : null}
             <button type="button" className="lte-btn lte-btn-default" disabled={busy} onClick={closeEdit}>
               Đóng
             </button>
-            <button
-              type="submit"
-              form="admin-edit-user-form"
-              className="lte-btn lte-btn-primary"
-              disabled={busy}
-            >
-              <Save size={15} /> {busy ? "Đang lưu…" : "Lưu phân quyền"}
-            </button>
+            {canManageUsers ? (
+              <button
+                type="submit"
+                form="admin-edit-user-form"
+                className="lte-btn lte-btn-primary"
+                disabled={busy}
+              >
+                <Save size={15} /> {busy ? "Đang lưu…" : "Lưu thay đổi"}
+              </button>
+            ) : null}
           </>
         }
       >
-        <form
-          id="admin-edit-user-form"
-          className="lte-form"
-          onSubmit={onSaveEdit}
-          style={{ maxWidth: "none" }}
-        >
-          <div className="lte-form-grid">
-            <label>
-              Vai trò
-              <select value={editRole} onChange={(e) => setEditRole(e.target.value)} disabled={busy}>
-                {(catalog.roles || []).map((r) => (
-                  <option key={r.key} value={r.key}>
-                    {r.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Tên hiển thị
-              <input
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                disabled={busy}
-              />
-            </label>
-            <label>
-              Đặt lại mật khẩu (tuỳ chọn)
-              <input
-                type="password"
-                minLength={6}
-                value={editPassword}
-                onChange={(e) => setEditPassword(e.target.value)}
-                placeholder="Để trống nếu không đổi"
-                disabled={busy}
-              />
-            </label>
-          </div>
-
-          <label style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <input
-              type="checkbox"
-              checked={useCustomPerms}
-              disabled={busy}
-              onChange={(e) => {
-                setUseCustomPerms(e.target.checked);
-                if (!e.target.checked) setEditPerms([...roleDefaults]);
-              }}
-            />
-            <span style={{ fontWeight: 600 }}>
-              Ghi đè quyền mặc định của vai trò (custom permissions)
-            </span>
-          </label>
-
-          {!useCustomPerms && (
-            <p className="lte-help">
-              Đang dùng quyền mặc định của <strong>{editRole}</strong>. Bật ghi đè để chọn từng
-              permission.
-            </p>
-          )}
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
-              gap: "0.5rem",
-              opacity: useCustomPerms ? 1 : 0.55,
-              pointerEvents: useCustomPerms ? "auto" : "none",
-            }}
+        <div className="lte-user-tabs">
+          <button
+            type="button"
+            className={`lte-user-tab${editTab === "profile" ? " is-active" : ""}`}
+            onClick={() => setEditTab("profile")}
           >
-            {(catalog.permissions || []).map((p) => (
-              <label
-                key={p.key}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "flex-start",
-                  gap: 8,
-                  border: "1px solid #eee",
-                  padding: "0.5rem 0.65rem",
-                  borderRadius: 3,
-                  fontWeight: 400,
+            Thông tin
+          </button>
+          <button
+            type="button"
+            className={`lte-user-tab${editTab === "password" ? " is-active" : ""}`}
+            onClick={() => setEditTab("password")}
+          >
+            Mật khẩu
+          </button>
+          {isSuperAdmin ? (
+            <button
+              type="button"
+              className={`lte-user-tab${editTab === "perms" ? " is-active" : ""}`}
+              onClick={() => setEditTab("perms")}
+            >
+              Phân quyền
+            </button>
+          ) : null}
+        </div>
+
+        <form id="admin-edit-user-form" className="lte-form lte-perm-form" onSubmit={onSaveEdit}>
+          {editTab === "profile" ? (
+            <section className="lte-perm-section">
+              <h4 className="lte-perm-section-title">Hồ sơ tài khoản</h4>
+              <div className="lte-perm-profile-grid">
+                <label>
+                  Email
+                  <input
+                    required
+                    type="email"
+                    value={editForm.email}
+                    onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                    disabled={busy || !canManageUsers}
+                  />
+                </label>
+                <label>
+                  Tên hiển thị
+                  <input
+                    value={editForm.displayName}
+                    onChange={(e) => setEditForm({ ...editForm, displayName: e.target.value })}
+                    disabled={busy || !canManageUsers}
+                  />
+                </label>
+                <label>
+                  Vai trò
+                  <select
+                    value={editForm.role}
+                    onChange={(e) => {
+                      const nextRole = e.target.value;
+                      setEditForm({ ...editForm, role: nextRole });
+                      if (!useCustomPerms) {
+                        const defaults =
+                          catalog.roles.find((r) => r.key === nextRole)?.defaultPermissions || [];
+                        setEditPerms([...defaults]);
+                      }
+                    }}
+                    disabled={busy || !isSuperAdmin}
+                  >
+                    {(catalog.roles || []).map((r) => (
+                      <option key={r.key} value={r.key}>
+                        {r.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Trạng thái
+                  <select
+                    value={editForm.isActive ? "1" : "0"}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, isActive: e.target.value === "1" })
+                    }
+                    disabled={busy || !canManageUsers || editId === me?.id}
+                  >
+                    <option value="1">Đang hoạt động</option>
+                    <option value="0">Đã khóa</option>
+                  </select>
+                </label>
+                <label className="lte-perm-span-2">
+                  Ví gắn tài khoản
+                  <input
+                    value={editForm.walletAddress}
+                    onChange={(e) => setEditForm({ ...editForm, walletAddress: e.target.value })}
+                    placeholder="0x… (để trống để gỡ)"
+                    disabled={busy || !canManageUsers}
+                  />
+                </label>
+              </div>
+            </section>
+          ) : null}
+
+          {editTab === "password" ? (
+            <section className="lte-perm-section">
+              <h4 className="lte-perm-section-title">Mật khẩu hiện tại</h4>
+              {storedPassword ? (
+                <div className="lte-pw-current">
+                  <div className="lte-pw-field">
+                    <input
+                      readOnly
+                      type={showStoredPw ? "text" : "password"}
+                      value={storedPassword}
+                    />
+                    <button
+                      type="button"
+                      className="lte-pw-toggle"
+                      onClick={() => setShowStoredPw((v) => !v)}
+                      aria-label={showStoredPw ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+                    >
+                      {showStoredPw ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
+                    <button
+                      type="button"
+                      className="lte-pw-toggle"
+                      onClick={copyPassword}
+                      aria-label="Sao chép mật khẩu"
+                      title="Sao chép"
+                    >
+                      <Copy size={15} />
+                    </button>
+                  </div>
+                  <p className="lte-help">
+                    Bản xem được dành cho quản trị lab. Đăng nhập vẫn dùng hash bcrypt.
+                  </p>
+                </div>
+              ) : (
+                <p className="lte-help">
+                  Tài khoản này chưa có bản mật khẩu xem được (tạo trước khi bật tính năng). Hãy đặt
+                  lại mật khẩu bên dưới để lưu và xem được lần sau.
+                </p>
+              )}
+
+              <h4 className="lte-perm-section-title" style={{ marginTop: 18 }}>
+                Đổi mật khẩu
+              </h4>
+              <div className="lte-perm-profile-grid">
+                <label>
+                  Mật khẩu mới
+                  <div className="lte-pw-field">
+                    <input
+                      type={showNewPw ? "text" : "password"}
+                      minLength={6}
+                      value={editForm.password}
+                      onChange={(e) => setEditForm({ ...editForm, password: e.target.value })}
+                      placeholder="Tối thiểu 6 ký tự"
+                      disabled={busy || !canManageUsers}
+                      autoComplete="new-password"
+                    />
+                    <button
+                      type="button"
+                      className="lte-pw-toggle"
+                      onClick={() => setShowNewPw((v) => !v)}
+                    >
+                      {showNewPw ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
+                  </div>
+                </label>
+                <label>
+                  Xác nhận mật khẩu mới
+                  <input
+                    type={showNewPw ? "text" : "password"}
+                    minLength={6}
+                    value={editForm.passwordConfirm}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, passwordConfirm: e.target.value })
+                    }
+                    placeholder="Nhập lại mật khẩu mới"
+                    disabled={busy || !canManageUsers}
+                    autoComplete="new-password"
+                  />
+                </label>
+              </div>
+            </section>
+          ) : null}
+
+          {editTab === "perms" && isSuperAdmin ? (
+            <section className="lte-perm-section">
+              <h4 className="lte-perm-section-title">Quyền hiệu lực</h4>
+
+              <button
+                type="button"
+                className={`lte-perm-override${useCustomPerms ? " is-on" : ""}`}
+                disabled={busy}
+                onClick={() => {
+                  const next = !useCustomPerms;
+                  setUseCustomPerms(next);
+                  if (!next) setEditPerms([...roleDefaults]);
                 }}
               >
-                <input
-                  type="checkbox"
-                  checked={editPerms.includes(p.key)}
-                  onChange={() => togglePerm(p.key)}
-                  disabled={busy}
-                />
-                <span>
-                  <strong style={{ fontSize: "0.85rem" }}>{p.key}</strong>
-                  <br />
-                  <span className="lte-help">{p.label}</span>
+                <span className={`lte-perm-switch${useCustomPerms ? " is-on" : ""}`} aria-hidden>
+                  <i />
                 </span>
-              </label>
-            ))}
-          </div>
+                <span className="lte-perm-override-copy">
+                  <strong>Ghi đè quyền mặc định của vai trò</strong>
+                  <small>
+                    {useCustomPerms
+                      ? "Đang dùng custom permissions — tick từng quyền bên dưới."
+                      : `Đang dùng quyền mặc định của vai trò «${editForm.role}». Bật để chọn từng permission.`}
+                  </small>
+                </span>
+              </button>
+
+              <div className={`lte-perm-grid${!useCustomPerms ? " is-locked" : ""}`}>
+                {(catalog.permissions || []).map((p) => {
+                  const checked = editPerms.includes(p.key);
+                  return (
+                    <label
+                      key={p.key}
+                      className={`lte-perm-card${checked ? " is-checked" : ""}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => togglePerm(p.key)}
+                        disabled={busy || !useCustomPerms}
+                      />
+                      <span className="lte-perm-card-body">
+                        <code>{p.key}</code>
+                        <span>{p.label}</span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </section>
+          ) : null}
         </form>
       </AdminModal>
 
@@ -553,6 +838,22 @@ export default function AdminUsersPanel({ onMessage }) {
         confirmLabel={toggleTarget?.isActive ? "Khóa" : "Mở khóa"}
         tone={toggleTarget?.isActive ? "danger" : "default"}
         icon={toggleTarget?.isActive ? Lock : Unlock}
+        busy={busy}
+      />
+
+      <AdminConfirmModal
+        open={Boolean(deleteTarget)}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={confirmHardDelete}
+        title="Xóa vĩnh viễn tài khoản?"
+        message={
+          deleteTarget
+            ? `Xóa ${deleteTarget.email} khỏi hệ thống? Không thể hoàn tác.`
+            : undefined
+        }
+        confirmLabel="Xóa vĩnh viễn"
+        tone="danger"
+        icon={Trash2}
         busy={busy}
       />
     </>

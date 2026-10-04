@@ -5,6 +5,56 @@ import {
   getRemainingTickets,
 } from "../services/blockchainService.js";
 import { licensePublicView } from "../utils/licenseVn.js";
+import {
+  organizerProfilePublicView,
+  resolveOrganizerProfileRef,
+} from "../utils/eventOrganizerProfile.js";
+import { programItemTypeLabel } from "../utils/programVn.js";
+import { buildDefaultSeatingChart, seatingPublicView } from "../utils/seatingVn.js";
+
+const ORGANIZER_PROFILE_POPULATE = {
+  path: "organizerProfile",
+  select: "profileCode organizationName status",
+};
+
+function decorateEventPublic(obj) {
+  obj.organizerUnit = organizerProfilePublicView(obj.organizerProfile);
+  attachProgramPublic(obj);
+  obj.seating = seatingPublicView(obj.seatingChart);
+  // không lộ heldBy / tokenId chi tiết trong seatingChart thô
+  delete obj.seatingChart;
+  return obj;
+}
+
+function attachProgramPublic(obj) {
+  const items = [...(obj.programItems || [])]
+    .map((it) => {
+      const o = it.toObject ? it.toObject() : it;
+      return {
+        id: String(o._id || o.id || ""),
+        title: o.title || "",
+        description: o.description || "",
+        itemType: o.itemType || "performance",
+        itemTypeLabel: programItemTypeLabel(o.itemType),
+        startAt: o.startAt || null,
+        endAt: o.endAt || null,
+        memberId: o.memberId ? String(o.memberId) : null,
+        performer: o.performer || "",
+        performerRole: o.performerRole || "",
+        stage: o.stage || "",
+        sortOrder: o.sortOrder ?? 0,
+      };
+    })
+    .sort((a, b) => {
+      if ((a.sortOrder || 0) !== (b.sortOrder || 0)) return (a.sortOrder || 0) - (b.sortOrder || 0);
+      const ta = a.startAt ? new Date(a.startAt).getTime() : 0;
+      const tb = b.startAt ? new Date(b.startAt).getTime() : 0;
+      return ta - tb;
+    });
+  obj.program = items;
+  obj.programItems = items;
+  return obj;
+}
 
 async function mergeTiersWithChain(ticketTypes = []) {
   const merged = [];
@@ -44,14 +94,23 @@ export const listEvents = asyncHandler(async (req, res) => {
   const page = Math.max(1, parseInt(req.query.page || "1", 10));
   const limit = Math.min(50, Math.max(1, parseInt(req.query.limit || "12", 10)));
   const skip = (page - 1) * limit;
+  const profileId = String(req.query.organizerProfileId || req.query.unitId || "").trim();
+  const filter = {};
+  if (profileId) filter.organizerProfile = profileId;
+
   const [rawItems, total] = await Promise.all([
-    Event.find().sort({ startTime: 1 }).skip(skip).limit(limit).populate("organizer", "email walletAddress"),
-    Event.countDocuments(),
+    Event.find(filter)
+      .sort({ startTime: 1 })
+      .skip(skip)
+      .limit(limit)
+      .populate("organizer", "email walletAddress")
+      .populate(ORGANIZER_PROFILE_POPULATE),
+    Event.countDocuments(filter),
   ]);
 
   const items = [];
   for (const ev of rawItems) {
-    const obj = ev.toObject();
+    const obj = decorateEventPublic(ev.toObject());
     obj.ticketTypes = await mergeTiersWithChain(obj.ticketTypes || []);
     const licPub = licensePublicView(obj.operatingLicense);
     obj.license = {
@@ -77,11 +136,13 @@ export const listEvents = asyncHandler(async (req, res) => {
 });
 
 export const getEvent = asyncHandler(async (req, res) => {
-  const event = await Event.findById(req.params.id).populate("organizer", "email walletAddress");
+  const event = await Event.findById(req.params.id)
+    .populate("organizer", "email walletAddress")
+    .populate(ORGANIZER_PROFILE_POPULATE);
   if (!event) {
     return res.status(404).json({ success: false, error: "Không tìm thấy sự kiện" });
   }
-  const obj = event.toObject();
+  const obj = decorateEventPublic(event.toObject());
   obj.ticketTypes = await mergeTiersWithChain(obj.ticketTypes || []);
   const licPub = licensePublicView(obj.operatingLicense);
   obj.license = {
@@ -111,6 +172,13 @@ export const createEvent = asyncHandler(async (req, res) => {
     }
   }
 
+  let organizerProfileId;
+  try {
+    organizerProfileId = await resolveOrganizerProfileRef(req.body);
+  } catch (err) {
+    return res.status(err.status || 400).json({ success: false, error: err.message });
+  }
+
   const { configureEventOnChain } = await import("../services/adminChainService.js");
   const chainResults = [];
   for (const t of ticketTypes) {
@@ -131,8 +199,17 @@ export const createEvent = asyncHandler(async (req, res) => {
     ticketTypes,
     coverImage: coverImage || "",
     organizer: req.user._id,
+    seatingChart: buildDefaultSeatingChart(ticketTypes, { rowsPerZone: 5, seatsPerRow: 10 }),
+    ...(organizerProfileId !== undefined ? { organizerProfile: organizerProfileId } : {}),
   });
-  res.status(201).json({ success: true, data: { event, chainResults } });
+  await event.populate([
+    { path: "organizer", select: "email walletAddress" },
+    ORGANIZER_PROFILE_POPULATE,
+  ]);
+  res.status(201).json({
+    success: true,
+    data: { event: decorateEventPublic(event.toObject()), chainResults },
+  });
 });
 
 export const updateEvent = asyncHandler(async (req, res) => {
@@ -147,6 +224,17 @@ export const updateEvent = asyncHandler(async (req, res) => {
   for (const f of fields) {
     if (req.body[f] !== undefined) event[f] = req.body[f];
   }
+  if (req.body.organizerProfileId !== undefined || req.body.organizerProfile !== undefined) {
+    try {
+      event.organizerProfile = await resolveOrganizerProfileRef(req.body);
+    } catch (err) {
+      return res.status(err.status || 400).json({ success: false, error: err.message });
+    }
+  }
   await event.save();
-  res.json({ success: true, data: { event } });
+  await event.populate([
+    { path: "organizer", select: "email walletAddress" },
+    ORGANIZER_PROFILE_POPULATE,
+  ]);
+  res.json({ success: true, data: { event: decorateEventPublic(event.toObject()) } });
 });

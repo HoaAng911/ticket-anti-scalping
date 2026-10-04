@@ -182,10 +182,19 @@ export async function generateLicensePdf(event) {
   });
   doc.moveDown(0.3);
 
-  const organizerEmail = event.organizer?.email || "đơn vị tổ chức";
+  const organizerEmail = event.organizer?.email || "";
+  const unitName =
+    event.organizerProfile?.organizationName ||
+    event.organizerUnit?.organizationName ||
+    "";
+  const unitCode =
+    event.organizerProfile?.profileCode || event.organizerUnit?.profileCode || "";
+  const organizerLabel = unitName
+    ? `${unitName}${unitCode ? ` (${unitCode})` : ""}${organizerEmail ? ` · ${organizerEmail}` : ""}`
+    : organizerEmail || "đơn vị tổ chức";
   const typeName = typeLabel(lic.licenseType).toLowerCase();
   const articles = [
-    `Điều 1. Cấp Giấy phép tổ chức hoạt động ${typeName} cho đơn vị tổ chức (${organizerEmail}) thực hiện chương trình «${event.title || "Sự kiện"}».`,
+    `Điều 1. Cấp Giấy phép tổ chức hoạt động ${typeName} cho đơn vị tổ chức (${organizerLabel}) thực hiện chương trình «${event.title || "Sự kiện"}».`,
     "Điều 2. Tổ chức đúng nội dung đăng ký; không tự ý thay đổi quy mô, địa điểm, thời gian khi chưa được cơ quan cấp phép chấp thuận bằng văn bản.",
     `Điều 3. Địa điểm: ${event.location || "…"}. Thời gian dự kiến: ${fmtDateShort(event.startTime)}. Phạm vi gắn sự kiện Điều 1 trên TicketChain (lab).`,
     "Điều 4. Bảo đảm an ninh trật tự, an toàn PCCC, vệ sinh môi trường; tuân thủ bản quyền và quảng cáo; chịu trách nhiệm pháp lý trong thời gian giấy phép có hiệu lực.",

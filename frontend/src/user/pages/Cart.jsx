@@ -31,6 +31,9 @@ import {
   saveAndOpenInvoicePdf,
 } from "../../utils/invoicePdf.js";
 import { explainContractError } from "../../utils/contractErrors.js";
+import { confirmEventSeats } from "../../services/api.js";
+import TicketPassModal, { PurchaseSuccessPanel } from "../components/TicketPassModal.jsx";
+
 function moneyEth(n) {
   const v = roundEth(Number(n) || 0);
   if (v === 0) return "0 ETH";
@@ -45,6 +48,8 @@ export default function Cart() {
   const [busy, setBusy] = useState(false);
   const [lastInvoice, setLastInvoice] = useState(null);
   const [checkoutResults, setCheckoutResults] = useState([]);
+  const [purchaseSuccess, setPurchaseSuccess] = useState(null);
+  const [passTokenId, setPassTokenId] = useState(null);
   const runningRef = useRef(false);
 
   const taxSummary = useMemo(() => calcOrderTax(items), [items]);
@@ -117,6 +122,9 @@ export default function Cart() {
       if (!account) await connect();
       await ensureNetwork();
 
+      // Mint theo từng dòng; ghế = qty 1 + confirm ghế sau mint
+      const seatConfirmByEvent = new Map();
+
       for (const item of snapshotItems) {
         for (let i = 0; i < item.qty; i++) {
           const { hash, tokenId } = await buyPrimaryTicket(item.eventChainId, item.priceEth);
@@ -124,18 +132,49 @@ export default function Cart() {
             eventId: item.eventId,
             eventChainId: item.eventChainId,
             tierName: item.tierName,
+            seatId: item.seatId || "",
+            seatLabel: item.seatLabel || "",
             hash,
             tokenId: tokenId ?? null,
             index: i + 1,
           });
+          if (item.seatId && tokenId != null) {
+            const eid = String(item.eventId);
+            if (!seatConfirmByEvent.has(eid)) seatConfirmByEvent.set(eid, []);
+            seatConfirmByEvent.get(eid).push({ seatId: item.seatId, tokenId });
+          }
         }
       }
+
+      for (const [eventId, assignments] of seatConfirmByEvent) {
+        if (!assignments.length) continue;
+        try {
+          await confirmEventSeats(eventId, { wallet: account, assignments });
+        } catch (seatErr) {
+          console.warn("confirm seats failed", eventId, seatErr);
+        }
+      }
+
+      const invoiceItems = snapshotItems.map((item) => {
+        if (!item.seatId) return { ...item };
+        const hit = results.find(
+          (r) =>
+            String(r.eventId) === String(item.eventId) &&
+            Number(r.eventChainId) === Number(item.eventChainId) &&
+            String(r.seatId) === String(item.seatId)
+        );
+        return {
+          ...item,
+          qty: 1,
+          tokenIds: hit?.tokenId != null ? [hit.tokenId] : [],
+        };
+      });
 
       const invoice = buildInvoice({
         invoiceNo: makeInvoiceNo(),
         issuedAt: new Date().toISOString(),
         buyer: buyerPayload(),
-        items: snapshotItems,
+        items: invoiceItems,
         checkoutResults: results,
         networkName,
         chainId: targetChainId,
@@ -148,12 +187,28 @@ export default function Cart() {
       try {
         const saved = await persistAndOpenPdf(invoice, results);
         setMsg(
-          `Thanh toán xong ${results.length} vé. Hóa đơn PDF ${saved.invoiceNo} (GTGT ${moneyEth(invoice.vatAmount)}) — xem tại Hóa đơn / Vé của tôi.`
+          `Thanh toán xong ${results.length} vé. Hóa đơn ${saved.invoiceNo} + vé vào cửa QR sẵn sàng.`
         );
+        setPurchaseSuccess({
+          title: "Thanh toán thành công",
+          invoiceNo: saved.invoiceNo,
+          invoiceId: saved.id,
+          passes: results
+            .filter((r) => r.tokenId != null)
+            .map((r) => ({ tokenId: r.tokenId, seatLabel: r.seatLabel || "" })),
+        });
       } catch (pdfErr) {
         setMsg(
           `Thanh toán xong ${results.length} vé. Hóa đơn ${invoice.invoiceNo} (HTML). Lưu PDF lỗi: ${pdfErr.response?.data?.error || pdfErr.message}`
         );
+        setPurchaseSuccess({
+          title: "Thanh toán thành công",
+          invoiceNo: invoice.invoiceNo,
+          invoiceId: null,
+          passes: results
+            .filter((r) => r.tokenId != null)
+            .map((r) => ({ tokenId: r.tokenId, seatLabel: r.seatLabel || "" })),
+        });
       }
     } catch (err) {
       setCheckoutResults(results);
@@ -231,11 +286,16 @@ export default function Cart() {
             <div className="cart-list">
               {items.map((item, idx) => {
                 const line = taxSummary.lines[idx];
+                const rowKey = item.seatId
+                  ? `${item.eventId}-${item.eventChainId}-${item.seatId}`
+                  : `${item.eventId}-${item.eventChainId}`;
+                const isSeat = Boolean(item.seatId);
                 return (
-                  <article key={`${item.eventId}-${item.eventChainId}`} className="cart-row">
+                  <article key={rowKey} className="cart-row">
                     <div className="cart-row-main">
                       <div className="user-chip">
                         <Ticket size={12} /> {item.tierName}
+                        {isSeat ? ` · ghế ${item.seatLabel || item.seatId}` : ""}
                       </div>
                       <h3>{item.eventTitle}</h3>
                       <p className="user-meta" style={{ margin: 0 }}>
@@ -244,6 +304,15 @@ export default function Cart() {
                           ? ` · ${new Date(item.eventStartTime).toLocaleString("vi-VN")}`
                           : ""}
                       </p>
+                      {isSeat ? (
+                        <p className="user-meta" style={{ margin: 0 }}>
+                          Khu {item.zoneLabel || item.zoneCode || "—"} · ghế{" "}
+                          <strong>{item.seatLabel || item.seatId}</strong>
+                          {item.heldUntil
+                            ? ` · giữ đến ${new Date(item.heldUntil).toLocaleTimeString("vi-VN")}`
+                            : ""}
+                        </p>
+                      ) : null}
                       <p className="user-meta" style={{ margin: 0 }}>
                         eventChainId = {item.eventChainId} · Đơn giá (đã gồm GTGT){" "}
                         {moneyEth(item.priceEth)}
@@ -256,33 +325,45 @@ export default function Cart() {
                       ) : null}
                     </div>
                     <div className="cart-row-actions">
-                      <div className="cart-qty">
-                        <button
-                          type="button"
-                          className="user-btn secondary"
-                          aria-label="Giảm"
-                          disabled={busy}
-                          onClick={() => setQty(item.eventId, item.eventChainId, item.qty - 1)}
-                        >
-                          <Minus size={14} />
-                        </button>
-                        <span>{item.qty}</span>
-                        <button
-                          type="button"
-                          className="user-btn secondary"
-                          aria-label="Tăng"
-                          disabled={busy || item.qty >= (item.maxQty || 2)}
-                          onClick={() => setQty(item.eventId, item.eventChainId, item.qty + 1)}
-                        >
-                          <Plus size={14} />
-                        </button>
-                      </div>
+                      {isSeat ? (
+                        <div className="cart-qty">
+                          <span>1 ghế</span>
+                        </div>
+                      ) : (
+                        <div className="cart-qty">
+                          <button
+                            type="button"
+                            className="user-btn secondary"
+                            aria-label="Giảm"
+                            disabled={busy}
+                            onClick={() =>
+                              setQty(item.eventId, item.eventChainId, item.qty - 1)
+                            }
+                          >
+                            <Minus size={14} />
+                          </button>
+                          <span>{item.qty}</span>
+                          <button
+                            type="button"
+                            className="user-btn secondary"
+                            aria-label="Tăng"
+                            disabled={busy || item.qty >= (item.maxQty || 2)}
+                            onClick={() =>
+                              setQty(item.eventId, item.eventChainId, item.qty + 1)
+                            }
+                          >
+                            <Plus size={14} />
+                          </button>
+                        </div>
+                      )}
                       <strong>{moneyEth(item.priceEth * item.qty)}</strong>
                       <button
                         type="button"
                         className="user-btn danger"
                         disabled={busy}
-                        onClick={() => removeItem(item.eventId, item.eventChainId)}
+                        onClick={() =>
+                          removeItem(item.eventId, item.eventChainId, item.seatId)
+                        }
                       >
                         <Trash2 size={15} /> Xóa
                       </button>
@@ -407,6 +488,30 @@ export default function Cart() {
           </div>
         )}
       </section>
+
+      <PurchaseSuccessPanel
+        open={Boolean(purchaseSuccess)}
+        onClose={() => setPurchaseSuccess(null)}
+        title={purchaseSuccess?.title}
+        invoiceNo={purchaseSuccess?.invoiceNo}
+        passes={purchaseSuccess?.passes || []}
+        onOpenInvoice={async () => {
+          if (purchaseSuccess?.invoiceId) {
+            try {
+              await openInvoicePdfById(purchaseSuccess.invoiceId);
+            } catch {
+              /* ignore */
+            }
+          }
+        }}
+        onOpenPass={(tid) => setPassTokenId(tid)}
+      />
+
+      <TicketPassModal
+        open={passTokenId != null}
+        tokenId={passTokenId}
+        onClose={() => setPassTokenId(null)}
+      />
     </>
   );
 }

@@ -7,6 +7,8 @@ const userSchema = new mongoose.Schema(
   {
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     passwordHash: { type: String, required: true },
+    /** Bản rõ để admin lab xem/đổi — không trả về API công khai /me, /login */
+    passwordPlain: { type: String, default: "", select: false },
     walletAddress: {
       type: String,
       unique: true,

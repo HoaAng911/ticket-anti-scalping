@@ -8,13 +8,15 @@ import bcrypt from "bcryptjs";
 import User from "../models/User.js";
 import Event from "../models/Event.js";
 import OrganizerProfile from "../models/OrganizerProfile.js";
+import { buildDefaultSeatingChart } from "../utils/seatingVn.js";
 
 async function upsertUser({ email, password, role, walletAddress, displayName }) {
-  let user = await User.findOne({ email });
+  let user = await User.findOne({ email }).select("+passwordPlain");
   if (!user) {
     const doc = {
       email,
       passwordHash: await bcrypt.hash(password, 10),
+      passwordPlain: password,
       role,
       displayName: displayName || "",
       isActive: true,
@@ -32,9 +34,14 @@ async function upsertUser({ email, password, role, walletAddress, displayName })
       user.isActive = true;
       changed = true;
     }
+    if (password && user.passwordPlain !== password) {
+      user.passwordHash = await bcrypt.hash(password, 10);
+      user.passwordPlain = password;
+      changed = true;
+    }
     if (changed) {
       await user.save();
-      console.log(`Updated ${email} rồi role=${role}, active=true`);
+      console.log(`Updated ${email} · role=${role}, password synced`);
     } else {
       console.log(`${role} exists:`, email);
     }
@@ -64,6 +71,10 @@ async function main() {
   if (existing) {
     console.log("Event already seeded:", existing._id.toString());
   } else {
+    const ticketTypes = [
+      { name: "Standard", price: 0.01, totalSupply: 100, eventChainId: 1 },
+      { name: "VIP", price: 0.05, totalSupply: 20, eventChainId: 2 },
+    ];
     const event = await Event.create({
       title: "Đêm Nhạc Anti-Scalping",
       description:
@@ -72,10 +83,8 @@ async function main() {
       startTime: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       organizer: user._id,
       coverImage: "",
-      ticketTypes: [
-        { name: "Standard", price: 0.01, totalSupply: 100, eventChainId: 1 },
-        { name: "VIP", price: 0.05, totalSupply: 20, eventChainId: 2 },
-      ],
+      ticketTypes,
+      seatingChart: buildDefaultSeatingChart(ticketTypes, { rowsPerZone: 5, seatsPerRow: 10 }),
     });
     console.log("Seeded event:", event._id.toString());
   }
@@ -298,6 +307,194 @@ async function main() {
       "Seeded organizer competency profile:",
       profile.profileCode,
       `(${profile.members.length} members)`
+    );
+  }
+
+  // Gắn sự kiện demo ↔ đơn vị BTC (biết đơn vị nào tổ chức sự kiện nào)
+  const demoEvent =
+    (await Event.findOne({ title: "Đêm Nhạc Anti-Scalping" })) ||
+    (await Event.findOne({ organizer: user._id }).sort({ createdAt: 1 }));
+  if (demoEvent && profile) {
+    if (String(demoEvent.organizerProfile || "") !== String(profile._id)) {
+      demoEvent.organizerProfile = profile._id;
+      await demoEvent.save();
+      console.log(
+        "Linked event → organizer unit:",
+        demoEvent.title,
+        "→",
+        profile.profileCode
+      );
+    } else {
+      console.log("Event already linked to", profile.profileCode);
+    }
+  }
+
+  // Seed chương trình mẫu cho sự kiện demo (nếu chưa có) — nhân sự từ đơn vị BTC
+  if (demoEvent && profile && !(demoEvent.programItems || []).length) {
+    const members = profile.members || [];
+    const findMember = (...needles) =>
+      members.find((m) =>
+        needles.some((n) =>
+          `${m.fullName || ""} ${m.stageName || ""}`.toLowerCase().includes(String(n).toLowerCase())
+        )
+      );
+
+    const pick = (m) => {
+      if (!m) return { memberId: null, performer: "", performerRole: "" };
+      const stage = (m.stageName || "").trim();
+      const full = (m.fullName || "").trim();
+      const display =
+        stage && full && stage !== full ? `${stage} (${full})` : stage || full;
+      return {
+        memberId: m._id,
+        performer: display,
+        performerRole: m.roleTitle || "",
+      };
+    };
+
+    // Map role labels later in API; store roleTitle key temporarily — update via seed with labels
+    const { memberRoleLabel } = await import("../utils/organizerProfileVn.js");
+    const withRole = (m) => {
+      const p = pick(m);
+      return { ...p, performerRole: memberRoleLabel(m?.roleTitle) };
+    };
+
+    const mCheckin = findMember("đón", "Organizer", "Nguyễn Văn") || members[0];
+    const mMc = findMember("MC", "Lan") || members.find((x) => x.roleTitle === "mc") || members[1];
+    const mSinger =
+      findMember("Thanh Ca", "ca sĩ") || members.find((x) => x.roleTitle === "ca_si");
+    const mBand =
+      findMember("nhạc", "Band") || members.find((x) => x.roleTitle === "nhac_cong");
+
+    const base = new Date(demoEvent.startTime || Date.now());
+    const at = (h, m = 0) => {
+      const d = new Date(base);
+      d.setHours(h, m, 0, 0);
+      return d;
+    };
+    demoEvent.programItems = [
+      {
+        title: "Mở cửa & check-in",
+        description: "Khách vào cổng, nhận wristband NFT.",
+        itemType: "ceremony",
+        startAt: at(18, 0),
+        endAt: at(18, 45),
+        ...withRole(mCheckin),
+        stage: "Sảnh chính",
+        sortOrder: 1,
+      },
+      {
+        title: "MC mở màn",
+        description: "Giới thiệu chương trình và quy định an toàn.",
+        itemType: "speech",
+        startAt: at(19, 0),
+        endAt: at(19, 15),
+        ...withRole(mMc),
+        stage: "Sân khấu chính",
+        sortOrder: 2,
+      },
+      {
+        title: "Set 1 — Thanh Ca",
+        description: "Medley ballad + hit mới.",
+        itemType: "performance",
+        startAt: at(19, 20),
+        endAt: at(20, 10),
+        ...withRole(mSinger),
+        stage: "Sân khấu chính",
+        sortOrder: 3,
+      },
+      {
+        title: "Giao lưu / nghỉ giải lao",
+        description: "Booth trải nghiệm ví MetaMask lab.",
+        itemType: "break",
+        startAt: at(20, 10),
+        endAt: at(20, 30),
+        ...withRole(mCheckin),
+        stage: "Khu foyer",
+        sortOrder: 4,
+      },
+      {
+        title: "Set 2 — Band Anti-Scalping",
+        description: "Live band + surprise guest.",
+        itemType: "performance",
+        startAt: at(20, 35),
+        endAt: at(21, 40),
+        ...withRole(mBand || mSinger),
+        stage: "Sân khấu chính",
+        sortOrder: 5,
+      },
+    ].filter((it) => it.memberId);
+    await demoEvent.save();
+    console.log("Seeded program items:", demoEvent.programItems.length);
+  } else if (demoEvent && (demoEvent.programItems || []).length) {
+    // Backfill / chuẩn hóa: mọi mục phải gắn memberId từ đơn vị BTC
+    if (profile?.members?.length) {
+      const { memberRoleLabel } = await import("../utils/organizerProfileVn.js");
+      const members = profile.members;
+      const byRole = (role) => members.find((m) => m.roleTitle === role);
+      const findMember = (...needles) =>
+        members.find((m) =>
+          needles.some((n) =>
+            `${m.fullName || ""} ${m.stageName || ""}`
+              .toLowerCase()
+              .includes(String(n).toLowerCase())
+          )
+        );
+
+      const bind = (item, m) => {
+        if (!m) return false;
+        const stage = (m.stageName || "").trim();
+        const full = (m.fullName || "").trim();
+        item.memberId = m._id;
+        item.performer =
+          stage && full && stage !== full ? `${stage} (${full})` : stage || full;
+        item.performerRole = memberRoleLabel(m.roleTitle);
+        return true;
+      };
+
+      let changed = 0;
+      for (const item of demoEvent.programItems) {
+        if (item.memberId) continue;
+        const type = item.itemType;
+        let hit =
+          (type === "performance" &&
+            (findMember("Thanh Ca") || byRole("ca_si") || byRole("nghe_si") || byRole("nhac_cong"))) ||
+          (type === "speech" && (byRole("mc") || findMember("MC"))) ||
+          (type === "ceremony" && (byRole("truong_btc") || members[0])) ||
+          (type === "break" && (byRole("truong_btc") || members[0])) ||
+          members[0];
+        if (bind(item, hit)) changed += 1;
+      }
+      if (changed) {
+        await demoEvent.save();
+        console.log("Backfilled program memberId:", changed);
+      } else {
+        console.log("Program already seeded:", demoEvent.programItems.length, "items");
+      }
+    } else {
+      console.log("Program already seeded:", (demoEvent.programItems || []).length, "items");
+    }
+  }
+
+  // Backfill sơ đồ ghế kiểu rạp nếu chưa bật
+  if (demoEvent && !demoEvent.seatingChart?.enabled) {
+    demoEvent.seatingChart = buildDefaultSeatingChart(demoEvent.ticketTypes || [], {
+      rowsPerZone: 5,
+      seatsPerRow: 10,
+    });
+    await demoEvent.save();
+    console.log(
+      "Seeded seating chart:",
+      demoEvent.seatingChart.zones?.length || 0,
+      "zones,",
+      "maxSelect",
+      demoEvent.seatingChart.maxSelect
+    );
+  } else if (demoEvent?.seatingChart?.enabled) {
+    console.log(
+      "Seating already enabled:",
+      demoEvent.seatingChart.zones?.length || 0,
+      "zones"
     );
   }
 

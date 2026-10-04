@@ -109,6 +109,11 @@ const organizerProfileSchema = new mongoose.Schema(
     reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
     reviewedAt: { type: Date, default: null },
     linkedUser: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+    /** Ví nhận tiền bán vé khi sự kiện sold-out (settle từ treasury lab) */
+    payoutWallet: { type: String, default: "", trim: true, lowercase: true },
+    /** Tài khoản ngân hàng đơn vị (đối soát off-chain) */
+    bankAccount: { type: String, default: "", trim: true },
+    bankName: { type: String, default: "", trim: true },
   },
   { timestamps: true }
 );

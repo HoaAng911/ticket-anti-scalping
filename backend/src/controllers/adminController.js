@@ -13,6 +13,11 @@ import {
   getFunderBalance,
   syncMongoEventsToChain,
 } from "../services/adminChainService.js";
+import {
+  organizerProfilePublicView,
+  resolveOrganizerProfileRef,
+} from "../utils/eventOrganizerProfile.js";
+import { seatingPublicView, buildDefaultSeatingChart } from "../utils/seatingVn.js";
 
 function parseAddressList(input) {
   if (Array.isArray(input)) {
@@ -37,7 +42,17 @@ export const getDashboard = asyncHandler(async (req, res) => {
       LabWallet.countDocuments(),
     ]);
 
-  const events = await Event.find().sort({ startTime: 1 }).populate("organizer", "email");
+  const eventsRaw = await Event.find()
+    .sort({ startTime: 1 })
+    .populate("organizer", "email")
+    .populate("organizerProfile", "profileCode organizationName status");
+  const events = eventsRaw.map((ev) => {
+    const obj = ev.toObject();
+    obj.organizerUnit = organizerProfilePublicView(obj.organizerProfile);
+    obj.seating = seatingPublicView(obj.seatingChart);
+    delete obj.seatingChart;
+    return obj;
+  });
   const remaining = {};
   for (const ev of events) {
     for (const t of ev.ticketTypes || []) {
@@ -220,6 +235,13 @@ export const createTicketType = asyncHandler(async (req, res) => {
     startEventChainId,
   } = req.body;
 
+  let organizerProfileId;
+  try {
+    organizerProfileId = await resolveOrganizerProfileRef(req.body);
+  } catch (err) {
+    return res.status(err.status || 400).json({ success: false, error: err.message });
+  }
+
   const rawTiers = normalizeTiers(req.body);
   if (!rawTiers?.length) {
     return res.status(400).json({
@@ -308,7 +330,14 @@ export const createTicketType = asyncHandler(async (req, res) => {
       coverImage: coverImage || "",
       organizer: req.user._id,
       ticketTypes: assigned,
+      seatingChart: buildDefaultSeatingChart(assigned, { rowsPerZone: 5, seatsPerRow: 10 }),
+      ...(organizerProfileId !== undefined ? { organizerProfile: organizerProfileId } : {}),
     });
+    await event.populate("organizerProfile", "profileCode organizationName status");
+    event = event.toObject();
+    event.organizerUnit = organizerProfilePublicView(event.organizerProfile);
+    event.seating = seatingPublicView(event.seatingChart);
+    delete event.seatingChart;
   }
 
   res.status(201).json({

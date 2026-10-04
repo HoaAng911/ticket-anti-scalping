@@ -8,6 +8,8 @@ import {
   Loader2,
   ArrowRight,
   Sparkles,
+  Building2,
+  Armchair,
 } from "lucide-react";
 import { getEvents } from "../../services/api.js";
 
@@ -33,7 +35,7 @@ export default function Home() {
           </p>
           <h1 className="user-brand-hero">TicketChain</h1>
           <p className="user-lead">
-            Mua vé sự kiện minh bạch — sở hữu on-chain, trần giá resale 110%, royalty về ban tổ chức.
+            Mua vé sự kiện minh bạch — chọn ghế theo khu, sở hữu on-chain, trần giá resale 110%.
           </p>
           <div className="user-hero-cta">
             <a href="#events" className="user-btn">
@@ -52,7 +54,7 @@ export default function Home() {
             <h2>
               <CalendarDays size={22} /> Sự kiện đang mở
             </h2>
-            <p>Chọn sự kiện, thêm giỏ hoặc mint ngay bằng MetaMask.</p>
+            <p>Chọn hạng vé → chọn ghế theo khu → thanh toán MetaMask.</p>
           </div>
         </div>
 
@@ -73,6 +75,7 @@ export default function Home() {
             const minPrice = Math.min(
               ...(ev.ticketTypes || []).map((t) => Number(t.price) || Infinity)
             );
+            const hasSeats = Boolean(ev.seating?.enabled && (ev.seating.zones || []).length);
             return (
               <Link key={ev._id} to={`/events/${ev._id}`} className="user-event-card user-event-card-link">
                 <div className="user-event-card-top">
@@ -88,20 +91,46 @@ export default function Home() {
                   <span className="user-meta-row">
                     <CalendarDays size={14} /> {new Date(ev.startTime).toLocaleString("vi-VN")}
                   </span>
+                  {(ev.organizerUnit?.organizationName ||
+                    ev.organizerProfile?.organizationName) && (
+                    <span className="user-meta-row">
+                      <Building2 size={14} />{" "}
+                      {ev.organizerUnit?.organizationName ||
+                        ev.organizerProfile?.organizationName}
+                    </span>
+                  )}
+                  {hasSeats ? (
+                    <span className="user-meta-row">
+                      <Armchair size={14} /> Chọn ghế · {ev.seating.zones.length} khu
+                    </span>
+                  ) : null}
                 </div>
                 <p className="user-event-desc">{ev.description}</p>
                 <div className="user-chip-row">
-                  {ev.ticketTypes?.slice(0, 3).map((t) => (
-                    <span key={t.eventChainId} className="user-chip">
-                      <Ticket size={12} /> {t.name}
-                    </span>
-                  ))}
+                  {ev.ticketTypes?.slice(0, 3).map((t) => {
+                    const zone = hasSeats
+                      ? (ev.seating.zones || []).find(
+                          (z) => Number(z.eventChainId) === Number(t.eventChainId)
+                        )
+                      : null;
+                    return (
+                      <span key={t.eventChainId} className="user-chip">
+                        <Ticket size={12} /> {t.name}
+                        {zone ? ` · ${zone.label}` : ""}
+                      </span>
+                    );
+                  })}
                   {(ev.ticketTypes?.length || 0) > 3 && (
                     <span className="user-chip muted">+{ev.ticketTypes.length - 3}</span>
                   )}
+                  {hasSeats ? (
+                    <span className="user-chip seat-chip-home">
+                      <Armchair size={12} /> Có sơ đồ ghế
+                    </span>
+                  ) : null}
                 </div>
                 <span className="user-btn user-btn-static">
-                  Xem chi tiết <ArrowRight size={15} />
+                  {hasSeats ? "Chọn ghế & mua" : "Xem chi tiết"} <ArrowRight size={15} />
                 </span>
               </Link>
             );

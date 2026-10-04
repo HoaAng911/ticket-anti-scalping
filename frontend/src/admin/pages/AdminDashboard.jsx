@@ -29,6 +29,11 @@ import {
   Sun,
   Moon,
   Award,
+  ListMusic,
+  Armchair,
+  Unplug,
+  Landmark,
+  FileSignature,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useTheme } from "../../context/ThemeContext.jsx";
@@ -37,6 +42,10 @@ import AdminUsersPanel from "../components/AdminUsersPanel.jsx";
 import AdminInvoicesPanel from "../components/AdminInvoicesPanel.jsx";
 import AdminLicensesPanel from "../components/AdminLicensesPanel.jsx";
 import AdminOrganizerProfilesPanel from "../components/AdminOrganizerProfilesPanel.jsx";
+import AdminEventProgramPanel from "../components/AdminEventProgramPanel.jsx";
+import AdminEventSeatingPanel from "../components/AdminEventSeatingPanel.jsx";
+import AdminEventPayoutPanel from "../components/AdminEventPayoutPanel.jsx";
+import AdminPaymentContractPanel from "../components/AdminPaymentContractPanel.jsx";
 import AdminModal, { AdminConfirmModal, AdminToast } from "../components/AdminModal.jsx";
 import {
   addTicketTypesToEvent,
@@ -44,12 +53,15 @@ import {
   createTicketTypeOnChain,
   fundWallets,
   getAdminDashboard,
+  getAdminOrganizerProfiles,
   getAdminTickets,
   getAdminTransactions,
   getLabWallets,
   getTicketChain,
   mintTicketsToWallets,
   syncEventsToChain,
+  updateEvent,
+  generateAdminEventSeating,
 } from "../../services/api.js";
 
 const defaultTiers = () => [
@@ -63,6 +75,7 @@ const emptyForm = {
   location: "",
   startTime: "",
   startEventChainId: "3",
+  organizerProfileId: "",
   tiers: defaultTiers(),
 };
 
@@ -112,6 +125,34 @@ const MENU = [
     icon: Award,
     tone: "indigo",
     desc: "Quản lý hồ sơ năng lực toàn bộ thành viên Ban tổ chức.",
+  },
+  {
+    id: "programs",
+    label: "Chương trình SK",
+    icon: ListMusic,
+    tone: "rose",
+    desc: "CRUD chương trình / timeline của từng sự kiện.",
+  },
+  {
+    id: "seating",
+    label: "Ghế sự kiện",
+    icon: Armchair,
+    tone: "cyan",
+    desc: "Xem ghế đã bán / trống và khóa hoặc mở bán ghế.",
+  },
+  {
+    id: "payouts",
+    label: "Thanh toán BTC",
+    icon: Landmark,
+    tone: "amber",
+    desc: "Cấu hình ví Ban tổ chức và settle tiền khi bán hết vé.",
+  },
+  {
+    id: "payment-contracts",
+    label: "Hợp đồng TT",
+    icon: FileSignature,
+    tone: "violet",
+    desc: "Hợp đồng thanh toán theo tiến độ — trả % định mức từng giai đoạn cho Ban tổ chức.",
   },
   {
     id: "chain",
@@ -199,11 +240,12 @@ export default function AdminDashboard() {
   const navigate = useNavigate();
   const { user, isAdmin, login, logout, loading, bindWallet } = useAuth();
   const { theme } = useTheme();
-  const { account, connect } = useWallet();
+  const { account, connect, disconnect, connecting, disconnecting } = useWallet();
   const [email, setEmail] = useState("admin@ticket.local");
   const [password, setPassword] = useState("admin123");
   const [authError, setAuthError] = useState(null);
   const [dash, setDash] = useState(null);
+  const [orgUnits, setOrgUnits] = useState([]);
   const [tickets, setTickets] = useState([]);
   const [txs, setTxs] = useState([]);
   const [labWallets, setLabWallets] = useState([]);
@@ -248,18 +290,20 @@ export default function AdminDashboard() {
   }
 
   async function loadAdmin() {
-    const [d, t, x, labs, ch] = await Promise.all([
+    const [d, t, x, labs, ch, orgs] = await Promise.all([
       getAdminDashboard(),
       getAdminTickets(),
       getAdminTransactions(),
       getLabWallets(),
       getTicketChain().catch(() => null),
+      getAdminOrganizerProfiles().catch(() => ({ profiles: [] })),
     ]);
     setDash(d);
     setTickets(t);
     setTxs(x);
     setLabWallets(labs);
     setChain(ch);
+    setOrgUnits(orgs?.profiles || []);
     setForm((f) => ({
       ...f,
       startEventChainId: nextChainIdFromEvents(d?.events),
@@ -328,12 +372,18 @@ export default function AdminDashboard() {
         ticketTypes,
         startEventChainId: Number(form.startEventChainId),
         saveMongo: true,
+        ...(form.organizerProfileId
+          ? { organizerProfileId: form.organizerProfileId }
+          : {}),
       });
       const tierSummary = (data.tiers || [])
         .map((t) => `${t.name}@${t.price}ETH(#${t.eventChainId})`)
         .join(", ");
+      const unitName = data.event?.organizerUnit?.organizationName;
       setMsg(
-        `Đã tạo sự kiện với ${data.tiers?.length || 0} hạng vé on-chain + Mongo: ${tierSummary}`
+        `Đã tạo sự kiện với ${data.tiers?.length || 0} hạng vé on-chain + Mongo: ${tierSummary}${
+          unitName ? ` · Đơn vị: ${unitName}` : ""
+        }`
       );
       setForm({
         ...emptyForm,
@@ -683,6 +733,31 @@ export default function AdminDashboard() {
           </div>
           <div className="lte-top-actions">
             <AdminThemeSwitch />
+            {account ? (
+              <>
+                <span className="lte-wallet-chip" title={account}>
+                  <Wallet size={14} /> {account.slice(0, 6)}…{account.slice(-4)}
+                </span>
+                <button
+                  type="button"
+                  className="lte-btn lte-btn-default"
+                  onClick={disconnect}
+                  disabled={disconnecting}
+                  title="Ngắt kết nối ví"
+                >
+                  <Unplug size={15} /> {disconnecting ? "Đang ngắt…" : "Ngắt ví"}
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                className="lte-btn lte-btn-primary"
+                onClick={connect}
+                disabled={connecting}
+              >
+                <Wallet size={15} /> {connecting ? "Đang nối…" : "Kết nối ví"}
+              </button>
+            )}
             <button type="button" className="lte-btn lte-btn-default" onClick={onLinkWallet}>
               <Wallet size={15} /> Liên kết ví
             </button>
@@ -807,6 +882,13 @@ export default function AdminDashboard() {
 
               {tab === "organizer-profiles" && (
                 <AdminOrganizerProfilesPanel onMessage={setMsg} />
+              )}
+
+              {tab === "programs" && <AdminEventProgramPanel onMessage={setMsg} />}
+              {tab === "seating" && <AdminEventSeatingPanel onMessage={setMsg} />}
+              {tab === "payouts" && <AdminEventPayoutPanel onMessage={setMsg} />}
+              {tab === "payment-contracts" && (
+                <AdminPaymentContractPanel onMessage={setMsg} />
               )}
 
               {tab === "overview" && (
@@ -1079,7 +1161,26 @@ export default function AdminDashboard() {
                         onChange={(e) => setForm({ ...form, startEventChainId: e.target.value })}
                       />
                     </label>
+                    <label>
+                      Đơn vị tổ chức (hồ sơ BTC)
+                      <select
+                        value={form.organizerProfileId}
+                        onChange={(e) => setForm({ ...form, organizerProfileId: e.target.value })}
+                      >
+                        <option value="">— Chưa chọn —</option>
+                        {orgUnits.map((u) => (
+                          <option key={u.id} value={u.id}>
+                            {u.profileCode} · {u.organizationName}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
                   </div>
+                  {!orgUnits.length ? (
+                    <p className="lte-help">
+                      Chưa có đơn vị BTC — tạo ở tab «Hồ sơ năng lực BTC» rồi quay lại gắn sự kiện.
+                    </p>
+                  ) : null}
 
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <strong>Hạng vé ({form.tiers.length})</strong>
@@ -1231,7 +1332,68 @@ export default function AdminDashboard() {
                         <p className="lte-help" style={{ marginTop: 4 }}>
                           {ev.location} · {new Date(ev.startTime).toLocaleString("vi-VN")} ·{" "}
                           {ev.ticketTypes?.length || 0} hạng vé
+                          {ev.seating?.enabled
+                            ? ` · ghế: trống ${
+                                (ev.seating.zones || []).reduce(
+                                  (n, z) => n + (Number(z.available) || 0),
+                                  0
+                                )
+                              }/${
+                                (ev.seating.zones || []).reduce(
+                                  (n, z) => n + (Number(z.total) || 0),
+                                  0
+                                )
+                              } · bán ${
+                                (ev.seating.zones || []).reduce(
+                                  (n, z) => n + (Number(z.sold) || 0),
+                                  0
+                                )
+                              }`
+                            : ""}
                         </p>
+                        <div className="lte-event-unit-row">
+                          <Award size={14} />
+                          <select
+                            className="lte-inline-select"
+                            value={String(
+                              ev.organizerUnit?.id ||
+                                ev.organizerProfile?._id ||
+                                ev.organizerProfile?.id ||
+                                (typeof ev.organizerProfile === "string"
+                                  ? ev.organizerProfile
+                                  : "") ||
+                                ""
+                            )}
+                            disabled={busy}
+                            onChange={async (e) => {
+                              const organizerProfileId = e.target.value;
+                              setBusy(true);
+                              setMsg(null);
+                              try {
+                                await updateEvent(ev._id, {
+                                  organizerProfileId: organizerProfileId || null,
+                                });
+                                setMsg(
+                                  organizerProfileId
+                                    ? `Đã gắn «${ev.title}» với đơn vị BTC.`
+                                    : `Đã gỡ đơn vị khỏi «${ev.title}».`
+                                );
+                                await loadAdmin();
+                              } catch (err) {
+                                setMsg(err.response?.data?.error || err.message);
+                              } finally {
+                                setBusy(false);
+                              }
+                            }}
+                          >
+                            <option value="">— Chưa gắn đơn vị —</option>
+                            {orgUnits.map((u) => (
+                              <option key={u.id} value={u.id}>
+                                {u.profileCode} · {u.organizationName}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                         <ul className="lte-tags">
                           {ev.ticketTypes?.map((t) => (
                             <li key={t.eventChainId}>
@@ -1253,6 +1415,42 @@ export default function AdminDashboard() {
                           }}
                         >
                           <Plus size={14} /> Thêm hạng
+                        </button>
+                        <button
+                          type="button"
+                          className="lte-btn lte-btn-default"
+                          disabled={busy}
+                          title={
+                            ev.seating?.enabled
+                              ? "Tạo lại sơ đồ ghế (ghi đè nếu force)"
+                              : "Tạo sơ đồ ghế theo hạng vé (kiểu rạp)"
+                          }
+                          onClick={async () => {
+                            setBusy(true);
+                            setMsg(null);
+                            try {
+                              const data = await generateAdminEventSeating(ev._id, {
+                                force: Boolean(ev.seating?.enabled),
+                                rowsPerZone: 4,
+                                seatsPerRow: 8,
+                              });
+                              setMsg(
+                                data.seating?.enabled
+                                  ? `Đã tạo sơ đồ ghế «${ev.title}»: ${
+                                      data.seating.zones?.length || 0
+                                    } khu.`
+                                  : `Đã cập nhật sơ đồ ghế «${ev.title}».`
+                              );
+                              await loadAdmin();
+                            } catch (err) {
+                              setMsg(err.response?.data?.error || err.message);
+                            } finally {
+                              setBusy(false);
+                            }
+                          }}
+                        >
+                          <Armchair size={14} />{" "}
+                          {ev.seating?.enabled ? "Tạo lại ghế" : "Tạo sơ đồ ghế"}
                         </button>
                         <Link className="lte-btn lte-btn-primary" to={`/events/${ev._id}`}>
                           <ExternalLink size={14} /> Trang bán

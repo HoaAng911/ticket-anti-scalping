@@ -16,6 +16,8 @@ import {
   ChevronDown,
   Sun,
   Moon,
+  ScanLine,
+  Unplug,
 } from "lucide-react";
 import { useWallet } from "../../hooks/useWallet.js";
 import { useAuth } from "../../context/AuthContext.jsx";
@@ -36,12 +38,13 @@ const PRIMARY = [
 
 const MORE = [
   { to: "/my-invoices", label: "Hóa đơn", icon: FileText },
+  { to: "/check-in", label: "Kiểm soát vé", icon: ScanLine },
   { to: "/ledger", label: "Dòng tiền", icon: Landmark },
   { to: "/user", label: "Tài khoản", icon: UserRound },
 ];
 
 export default function Layout({ children }) {
-  const { account, connect, connecting, wrongNetwork, ensureNetwork, targetChainId, networkName } =
+  const { account, connect, disconnect, connecting, disconnecting, wrongNetwork, ensureNetwork, targetChainId, networkName } =
     useWallet();
   const { user, logout } = useAuth();
   const { count } = useCart();
@@ -197,9 +200,21 @@ export default function Layout({ children }) {
             </button>
           )}
           {account ? (
-            <span className="user-chip wallet">
-              <Wallet size={14} /> {short(account)}
-            </span>
+            <div className="user-wallet-connected">
+              <span className="user-chip wallet" title={account}>
+                <Wallet size={14} /> {short(account)}
+              </span>
+              <button
+                type="button"
+                className="user-wallet-btn ghost disconnect"
+                onClick={disconnect}
+                disabled={disconnecting}
+                title="Ngắt kết nối ví"
+              >
+                <Unplug size={15} />
+                <span className="user-nav-hide-sm">{disconnecting ? "Đang ngắt…" : "Ngắt ví"}</span>
+              </button>
+            </div>
           ) : (
             <button
               type="button"
@@ -208,7 +223,7 @@ export default function Layout({ children }) {
               disabled={connecting}
             >
               <Wallet size={15} />
-              {connecting ? "Đang nối…" : "MetaMask"}
+              {connecting ? "Đang nối…" : "Kết nối ví"}
             </button>
           )}
         </div>

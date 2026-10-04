@@ -41,6 +41,23 @@ function escapeHtml(s) {
     .replace(/"/g, "&quot;");
 }
 
+/** Khóa dòng hàng: mỗi ghế = 1 dòng riêng */
+export function invoiceLineKey(item) {
+  const eventId = item?.eventId ?? "";
+  const chainId = item?.eventChainId ?? "";
+  if (item?.seatId) return `${eventId}::${chainId}::${item.seatId}`;
+  return `${eventId}::${chainId}`;
+}
+
+function seatDescHtml(item) {
+  if (!item?.seatId && !item?.seatLabel) return "";
+  const zone = item.zoneLabel || item.zoneCode || "";
+  const seat = item.seatLabel || item.seatId;
+  return `<br/><span class="muted"><strong>Ghế ${escapeHtml(seat)}</strong>${
+    zone ? ` · khu ${escapeHtml(zone)}` : ""
+  } · 1 ghế = 1 vé</span>`;
+}
+
 export function buildInvoice({
   invoiceNo,
   issuedAt,
@@ -55,8 +72,10 @@ export function buildInvoice({
   const tax = calcOrderTax(items);
   const txByKey = {};
   const tokenIdsByKey = {};
+
+  // Ghế: gắn token/tx đúng từng ghế. Không ghế: gộp theo hạng như trước.
   for (const r of checkoutResults) {
-    const key = `${r.eventId}::${r.eventChainId}`;
+    const key = invoiceLineKey(r);
     if (!txByKey[key]) txByKey[key] = [];
     if (!tokenIdsByKey[key]) tokenIdsByKey[key] = [];
     if (r.hash) txByKey[key].push(r.hash);
@@ -66,21 +85,49 @@ export function buildInvoice({
     }
   }
 
+  // Fallback: kết quả không có seatId nhưng item có — map theo thứ tự cùng hạng
+  const unusedByTier = {};
+  for (const r of checkoutResults) {
+    if (r.seatId) continue;
+    const tierKey = `${r.eventId}::${r.eventChainId}`;
+    if (!unusedByTier[tierKey]) unusedByTier[tierKey] = [];
+    unusedByTier[tierKey].push(r);
+  }
+
   const enrichedItems = (items || []).map((item, idx) => {
     const lineTax = tax.lines[idx] || calcOrderTax([item]).lines[0];
-    const key = `${item.eventId}::${item.eventChainId}`;
-    const fromResults = tokenIdsByKey[key] || [];
+    const key = invoiceLineKey(item);
+    let fromResults = tokenIdsByKey[key] || [];
+    let txs = txByKey[key] || [];
+
+    if ((!fromResults.length || !txs.length) && item.seatId) {
+      const tierKey = `${item.eventId}::${item.eventChainId}`;
+      const pool = unusedByTier[tierKey] || [];
+      const hit = pool.shift();
+      if (hit) {
+        const tid = Number(hit.tokenId);
+        if (Number.isFinite(tid) && tid > 0) fromResults = [...fromResults, tid];
+        if (hit.hash) txs = [...txs, hit.hash];
+      }
+    }
+
     const own = Array.isArray(item.tokenIds)
       ? item.tokenIds.map(Number).filter((n) => Number.isFinite(n) && n > 0)
       : item.tokenId != null
         ? [Number(item.tokenId)]
         : [];
     const tokenIds = [...new Set([...own, ...fromResults])];
+
     return {
       ...item,
+      qty: item.seatId ? 1 : item.qty,
       ...lineTax,
       tokenIds,
-      txHashes: txByKey[key] || item.txHashes || [],
+      txHashes: txs.length ? txs : item.txHashes || [],
+      seatId: item.seatId || "",
+      seatLabel: item.seatLabel || item.seatId || "",
+      zoneCode: item.zoneCode || "",
+      zoneLabel: item.zoneLabel || "",
     };
   });
 
@@ -118,19 +165,25 @@ export function invoiceToHtml(invoice) {
   const isPaid = invoice.status === "paid";
   const rows = invoice.items
     .map((item, idx) => {
-      const txs = invoice.txByKey[`${item.eventId}::${item.eventChainId}`] || [];
+      const txs =
+        item.txHashes?.length
+          ? item.txHashes
+          : invoice.txByKey?.[invoiceLineKey(item)] ||
+            invoice.txByKey?.[`${item.eventId}::${item.eventChainId}`] ||
+            [];
       return `
       <tr>
         <td>${idx + 1}</td>
         <td>
           <strong>${escapeHtml(item.eventTitle)}</strong><br/>
-          <span class="muted">Hạng: ${escapeHtml(item.tierName)} · Mã on-chain eventChainId ${item.eventChainId}</span><br/>
+          <span class="muted">Hạng: ${escapeHtml(item.tierName)} · Mã on-chain eventChainId ${item.eventChainId}</span>
+          ${seatDescHtml(item)}
           ${
             item.tokenIds?.length
-              ? `<span class="muted">Token NFT: #${item.tokenIds.join(", #")}</span><br/>`
+              ? `<br/><span class="muted">Token NFT: #${item.tokenIds.join(", #")}</span>`
               : ""
           }
-          <span class="muted">Địa điểm: ${escapeHtml(item.eventLocation || "—")}</span>
+          <br/><span class="muted">Địa điểm: ${escapeHtml(item.eventLocation || "—")}</span>
           ${item.eventStartTime ? `<br/><span class="muted">Thời gian: ${fmtDate(item.eventStartTime)}</span>` : ""}
           <br/><span class="muted">Nhóm dịch vụ: Vé sự kiện / vui chơi giải trí — chịu GTGT ${formatVatRate(item.ratePercent)}</span>
           ${

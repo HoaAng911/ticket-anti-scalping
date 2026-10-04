@@ -13,6 +13,7 @@ import UserPortal from "./user/pages/UserPortal.jsx";
 import Cart from "./user/pages/Cart.jsx";
 import Ledger from "./user/pages/Ledger.jsx";
 import MyInvoices from "./user/pages/MyInvoices.jsx";
+import CheckIn from "./user/pages/CheckIn.jsx";
 import "./admin/styles/admin.css";
 import "./user/styles/user.css";
 
@@ -34,6 +35,7 @@ function AppRoutes() {
         <Route path="/marketplace" element={<Marketplace />} />
         <Route path="/cart" element={<Cart />} />
         <Route path="/ledger" element={<Ledger />} />
+        <Route path="/check-in" element={<CheckIn />} />
       </Routes>
     </Layout>
   );

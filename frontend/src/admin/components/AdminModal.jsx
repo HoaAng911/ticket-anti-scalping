@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 
 /**
  * Modal admin dùng chung — overlay + panel, ESC / click nền để đóng.
+ * Lưu ý: không focus lại panel khi parent re-render (tránh ngắt gõ phím form).
  */
 export default function AdminModal({
   open,
@@ -17,21 +18,41 @@ export default function AdminModal({
 }) {
   const titleId = useId();
   const panelRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+  const wasOpenRef = useRef(false);
 
   useEffect(() => {
-    if (!open) return undefined;
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!open) {
+      wasOpenRef.current = false;
+      return undefined;
+    }
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const onKey = (e) => {
-      if (e.key === "Escape") onClose?.();
+      if (e.key === "Escape") onCloseRef.current?.();
     };
     window.addEventListener("keydown", onKey);
-    requestAnimationFrame(() => panelRef.current?.focus?.());
+    // Chỉ focus panel khi vừa mở — không cướp focus mỗi lần onClose/title đổi
+    const justOpened = !wasOpenRef.current;
+    wasOpenRef.current = true;
+    if (justOpened) {
+      requestAnimationFrame(() => {
+        const active = document.activeElement;
+        const panel = panelRef.current;
+        if (!panel) return;
+        if (active && panel.contains(active) && active !== panel) return;
+        panel.focus?.();
+      });
+    }
     return () => {
       document.body.style.overflow = prev;
       window.removeEventListener("keydown", onKey);
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 

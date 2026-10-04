@@ -8,6 +8,7 @@ import {
   Plus,
   Trash2,
   Trophy,
+  Pencil,
 } from "lucide-react";
 import AdminModal from "./AdminModal.jsx";
 
@@ -190,17 +191,21 @@ export default function AdminMemberProfileModal({
   onClose,
   onSave,
   onEdit,
+  onDelete,
 }) {
   const [tab, setTab] = useState("overview");
   const [form, setForm] = useState(emptyMemberForm);
   const canEdit = mode === "edit" || mode === "create";
   const readOnly = !canEdit;
 
+  // Chỉ hydrate khi mở modal / đổi mode / đổi thành viên — tránh reset form giữa lúc gõ
+  const memberId = member?.id || "";
   useEffect(() => {
     if (!open) return;
     setTab(mode === "create" || mode === "edit" ? "personal" : "overview");
     setForm(mode === "create" ? emptyMemberForm("ca_si") : memberToForm(member));
-  }, [open, mode, member]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- cố ý không phụ thuộc toàn bộ object member
+  }, [open, mode, memberId]);
 
   function set(field, value) {
     setForm((f) => ({ ...f, [field]: value }));
@@ -227,21 +232,32 @@ export default function AdminMemberProfileModal({
     onSave?.(memberFormToPayload(form));
   }
 
-  const titleName = form.stageName || form.fullName || "Thành viên mới";
+  const titleName =
+    mode === "create"
+      ? "Thêm thành viên"
+      : member?.stageName || member?.fullName || form.stageName || form.fullName || "Hồ sơ thành viên";
+  // Không đổi title theo từng phím gõ (tránh reflow header khi đang nhập) — chỉ dùng snapshot thành viên khi sửa
+  const displayTitle =
+    mode === "edit"
+      ? member?.stageName || member?.fullName || "Sửa hồ sơ"
+      : titleName;
   const genderLabel =
     (catalog.genders || []).find((g) => g.key === form.gender)?.label || form.gender || "—";
   const roleLabel =
     (catalog.memberRoles || []).find((r) => r.key === form.roleTitle)?.label || form.roleTitle;
 
+  const modeLabel =
+    mode === "create" ? "Thêm mới" : mode === "edit" ? "Đang sửa" : "Xem hồ sơ";
+
   return (
     <AdminModal
       open={open}
       onClose={busy ? () => {} : onClose}
-      title={mode === "create" ? "Thêm thành viên" : titleName}
+      title={displayTitle}
       subtitle={
         profile
-          ? `${profile.profileCode || ""} · ${profile.organizationName || ""} · ${roleLabel}`
-          : roleLabel
+          ? `${profile.profileCode || ""} · ${profile.organizationName || ""}`
+          : "Hồ sơ năng lực thành viên BTC"
       }
       icon={User}
       size="xl"
@@ -251,10 +267,25 @@ export default function AdminMemberProfileModal({
           <button type="button" className="lte-btn lte-btn-default" disabled={busy} onClick={onClose}>
             {readOnly ? "Đóng" : "Hủy"}
           </button>
+          {readOnly && onDelete && profile?.status !== "approved" ? (
+            <button
+              type="button"
+              className="lte-btn lte-btn-danger"
+              disabled={busy}
+              onClick={onDelete}
+            >
+              <Trash2 size={14} /> Xóa
+            </button>
+          ) : null}
           {readOnly && profile?.status !== "approved" ? (
             <button type="button" className="lte-btn lte-btn-primary" onClick={onEdit}>
-              Quản lý hồ sơ
+              <Pencil size={14} /> Sửa hồ sơ
             </button>
+          ) : null}
+          {readOnly && profile?.status === "approved" ? (
+            <span className="lte-help" style={{ marginRight: "auto" }}>
+              Đơn vị đã duyệt — từ chối hồ sơ đơn vị trước khi sửa/xóa thành viên.
+            </span>
           ) : null}
           {canEdit ? (
             <button type="button" className="lte-btn lte-btn-primary" disabled={busy} onClick={submit}>
@@ -265,152 +296,180 @@ export default function AdminMemberProfileModal({
         </>
       }
     >
-      <div className="lte-member-tabs" role="tablist">
-        {TABS.map((t) => {
-          const Icon = t.icon;
-          return (
-            <button
-              key={t.id}
-              type="button"
-              role="tab"
-              aria-selected={tab === t.id}
-              className={tab === t.id ? "active" : undefined}
-              onClick={() => setTab(t.id)}
-            >
-              <Icon size={14} /> {t.label}
-              {t.id === "degrees" && form.degrees.length ? (
-                <span className="lte-tab-count">{form.degrees.length}</span>
-              ) : null}
-              {t.id === "certs" && form.certificates.length ? (
-                <span className="lte-tab-count">{form.certificates.length}</span>
-              ) : null}
-            </button>
-          );
-        })}
-      </div>
-
-      <form className="lte-form lte-member-profile" onSubmit={submit} style={{ maxWidth: "none" }}>
-        {tab === "overview" && (
-          <div className="lte-profile-overview">
-            <div className="lte-profile-hero">
-              <div className="lte-avatar" style={{ width: 56, height: 56, fontSize: "1.25rem" }}>
-                {(form.stageName || form.fullName || "?").slice(0, 1).toUpperCase()}
-              </div>
-              <div>
-                <h3 style={{ margin: 0 }}>{form.stageName || form.fullName || "—"}</h3>
-                {form.stageName && form.fullName ? (
-                  <p className="lte-help" style={{ margin: "0.2rem 0 0" }}>
-                    {form.fullName}
-                  </p>
-                ) : null}
-                <p className="lte-help" style={{ margin: "0.35rem 0 0" }}>
-                  {roleLabel}
-                  {form.specialty ? ` · ${form.specialty}` : ""}
-                  {form.experienceYears ? ` · ${form.experienceYears} năm KN` : ""}
-                </p>
-              </div>
-            </div>
-            {form.bio ? <p className="lte-profile-bio">{form.bio}</p> : null}
-            <div className="lte-info-grid">
-              <InfoRow label="CCCD/CMND" value={form.idNumber} />
-              <InfoRow label="Ngày sinh" value={form.dateOfBirth} />
-              <InfoRow label="Giới tính" value={genderLabel !== "— Chưa chọn —" ? genderLabel : ""} />
-              <InfoRow label="Quốc tịch" value={form.nationality} />
-              <InfoRow label="Quê quán" value={form.hometown} />
-              <InfoRow label="Địa chỉ" value={form.address} />
-              <InfoRow label="Điện thoại" value={form.phone} />
-              <InfoRow label="Email" value={form.email} />
-              <InfoRow label="Liên hệ khẩn" value={form.emergencyContact} />
-              <InfoRow label="SĐT khẩn" value={form.emergencyPhone} />
-              <InfoRow label="MST cá nhân" value={form.taxCode} />
-              <InfoRow
-                label="Tài khoản NH"
-                value={
-                  form.bankAccount
-                    ? `${form.bankAccount}${form.bankName ? ` · ${form.bankName}` : ""}`
-                    : ""
-                }
-              />
-              <InfoRow label="Hội viên" value={form.unionMembership} />
-              <InfoRow label="Ngôn ngữ" value={form.languages} />
-              <InfoRow label="Portfolio" value={form.portfolioUrl} />
-            </div>
-
-            <h4 className="lte-section-title">
-              <GraduationCap size={16} /> Bằng cấp ({form.degrees.length})
-            </h4>
-            {form.degrees.length ? (
-              <ul className="lte-profile-list">
-                {form.degrees.map((d, i) => (
-                  <li key={i}>
-                    <strong>{d.title || "—"}</strong>
-                    <span>
-                      {[d.level, d.major, d.school, d.year].filter(Boolean).join(" · ")}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="lte-muted">Chưa khai báo bằng cấp.</p>
-            )}
-
-            <h4 className="lte-section-title">
-              <BadgeCheck size={16} /> Chứng chỉ hành nghề ({form.certificates.length})
-            </h4>
-            {form.certificates.length ? (
-              <ul className="lte-profile-list">
-                {form.certificates.map((c, i) => (
-                  <li key={i}>
-                    <strong>{c.name || "—"}</strong>
-                    <span>
-                      {[c.issuer, c.number && `Số ${c.number}`, c.issuedAt, c.expiresAt && `HSD ${c.expiresAt}`]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="lte-muted">Chưa khai báo chứng chỉ.</p>
-            )}
-
-            <h4 className="lte-section-title">
-              <Trophy size={16} /> Giải thưởng ({form.awards.length})
-            </h4>
-            {form.awards.length ? (
-              <ul className="lte-profile-list">
-                {form.awards.map((a, i) => (
-                  <li key={i}>
-                    <strong>{a.title || "—"}</strong>
-                    <span>{[a.year, a.organizer].filter(Boolean).join(" · ")}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="lte-muted">Chưa khai báo giải thưởng.</p>
-            )}
-
-            {(form.qualifications || form.pastEvents || form.notes) && (
-              <>
-                <h4 className="lte-section-title">Ghi chú năng lực</h4>
-                {form.qualifications ? <p>{form.qualifications}</p> : null}
-                {form.pastEvents ? (
-                  <p className="lte-help">
-                    <strong>Sự kiện:</strong> {form.pastEvents}
-                  </p>
-                ) : null}
-                {form.notes ? (
-                  <p className="lte-help">
-                    <strong>Ghi chú:</strong> {form.notes}
-                  </p>
-                ) : null}
-              </>
-            )}
+      <div className="lte-btc-profile">
+        <div className="lte-btc-hero">
+          <div className="lte-avatar lte-avatar-lg">
+            {(form.stageName || form.fullName || "?").slice(0, 1).toUpperCase()}
           </div>
-        )}
+          <div className="lte-btc-hero-main">
+            <div className="lte-btc-hero-top">
+              <h3>{form.stageName || form.fullName || "Thành viên mới"}</h3>
+              <span className={`lte-pill tone-${mode === "view" ? "muted" : "accent"}`}>
+                {modeLabel}
+              </span>
+            </div>
+            {form.stageName && form.fullName ? (
+              <p className="lte-btc-legal-name">{form.fullName}</p>
+            ) : null}
+            <div className="lte-btc-meta">
+              <span className="lte-chip">{roleLabel || "Chưa chọn vai trò"}</span>
+              {form.specialty ? <span className="lte-chip soft">{form.specialty}</span> : null}
+              {Number(form.experienceYears) > 0 ? (
+                <span className="lte-chip soft">{form.experienceYears} năm KN</span>
+              ) : null}
+            </div>
+          </div>
+        </div>
 
-        {tab === "personal" && (
-          <div className="lte-form-grid" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
+        <div className="lte-member-tabs" role="tablist">
+          {TABS.map((t) => {
+            const Icon = t.icon;
+            const count =
+              t.id === "degrees"
+                ? form.degrees.length
+                : t.id === "certs"
+                  ? form.certificates.length + form.awards.length
+                  : 0;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                aria-selected={tab === t.id}
+                className={tab === t.id ? "active" : undefined}
+                onClick={() => setTab(t.id)}
+              >
+                <Icon size={14} /> {t.label}
+                {count ? <span className="lte-tab-count">{count}</span> : null}
+              </button>
+            );
+          })}
+        </div>
+
+        <form className="lte-form lte-member-profile" onSubmit={submit}>
+          {tab === "overview" && (
+            <div className="lte-profile-overview">
+              {form.bio ? <p className="lte-profile-bio">{form.bio}</p> : null}
+
+              <section className="lte-form-section">
+                <h4 className="lte-form-section-title">Thông tin cá nhân</h4>
+                <div className="lte-info-grid">
+                  <InfoRow label="CCCD/CMND" value={form.idNumber} />
+                  <InfoRow label="Ngày sinh" value={form.dateOfBirth} />
+                  <InfoRow
+                    label="Giới tính"
+                    value={genderLabel !== "— Chưa chọn —" ? genderLabel : ""}
+                  />
+                  <InfoRow label="Quốc tịch" value={form.nationality} />
+                  <InfoRow label="Quê quán" value={form.hometown} />
+                  <InfoRow label="Địa chỉ" value={form.address} />
+                  <InfoRow label="Điện thoại" value={form.phone} />
+                  <InfoRow label="Email" value={form.email} />
+                  <InfoRow label="Liên hệ khẩn" value={form.emergencyContact} />
+                  <InfoRow label="SĐT khẩn" value={form.emergencyPhone} />
+                  <InfoRow label="MST cá nhân" value={form.taxCode} />
+                  <InfoRow
+                    label="Tài khoản NH"
+                    value={
+                      form.bankAccount
+                        ? `${form.bankAccount}${form.bankName ? ` · ${form.bankName}` : ""}`
+                        : ""
+                    }
+                  />
+                  <InfoRow label="Hội viên" value={form.unionMembership} />
+                  <InfoRow label="Ngôn ngữ" value={form.languages} />
+                  <InfoRow label="Portfolio" value={form.portfolioUrl} />
+                </div>
+              </section>
+
+              <section className="lte-form-section">
+                <h4 className="lte-form-section-title">
+                  <GraduationCap size={16} /> Bằng cấp ({form.degrees.length})
+                </h4>
+                {form.degrees.length ? (
+                  <ul className="lte-profile-list">
+                    {form.degrees.map((d, i) => (
+                      <li key={i}>
+                        <strong>{d.title || "—"}</strong>
+                        <span>
+                          {[d.level, d.major, d.school, d.year].filter(Boolean).join(" · ")}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="lte-muted">Chưa khai báo bằng cấp.</p>
+                )}
+              </section>
+
+              <section className="lte-form-section">
+                <h4 className="lte-form-section-title">
+                  <BadgeCheck size={16} /> Chứng chỉ hành nghề ({form.certificates.length})
+                </h4>
+                {form.certificates.length ? (
+                  <ul className="lte-profile-list">
+                    {form.certificates.map((c, i) => (
+                      <li key={i}>
+                        <strong>{c.name || "—"}</strong>
+                        <span>
+                          {[
+                            c.issuer,
+                            c.number && `Số ${c.number}`,
+                            c.issuedAt,
+                            c.expiresAt && `HSD ${c.expiresAt}`,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="lte-muted">Chưa khai báo chứng chỉ.</p>
+                )}
+              </section>
+
+              <section className="lte-form-section">
+                <h4 className="lte-form-section-title">
+                  <Trophy size={16} /> Giải thưởng ({form.awards.length})
+                </h4>
+                {form.awards.length ? (
+                  <ul className="lte-profile-list">
+                    {form.awards.map((a, i) => (
+                      <li key={i}>
+                        <strong>{a.title || "—"}</strong>
+                        <span>{[a.year, a.organizer].filter(Boolean).join(" · ")}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="lte-muted">Chưa khai báo giải thưởng.</p>
+                )}
+              </section>
+
+              {(form.qualifications || form.pastEvents || form.notes) && (
+                <section className="lte-form-section">
+                  <h4 className="lte-form-section-title">Ghi chú năng lực</h4>
+                  {form.qualifications ? <p className="lte-profile-note">{form.qualifications}</p> : null}
+                  {form.pastEvents ? (
+                    <p className="lte-help">
+                      <strong>Sự kiện:</strong> {form.pastEvents}
+                    </p>
+                  ) : null}
+                  {form.notes ? (
+                    <p className="lte-help">
+                      <strong>Ghi chú:</strong> {form.notes}
+                    </p>
+                  ) : null}
+                </section>
+              )}
+            </div>
+          )}
+
+          {tab === "personal" && (
+            <section className="lte-form-section">
+              <h4 className="lte-form-section-title">Thông tin định danh & liên hệ</h4>
+              <div className="lte-form-grid lte-form-grid-3">
             <Field label="Họ và tên khai sinh *">
               <input
                 required
@@ -433,8 +492,7 @@ export default function AdminMemberProfileModal({
                 disabled={readOnly}
                 onChange={(v) => set("roleTitle", v)}
               />
-            </Field>
-            <Field label="CCCD/CMND">
+            </Field>            <Field label="CCCD/CMND">
               <input
                 disabled={readOnly}
                 value={form.idNumber}
@@ -541,11 +599,12 @@ export default function AdminMemberProfileModal({
                 onChange={(e) => set("bio", e.target.value)}
               />
             </Field>
-          </div>
-        )}
+              </div>
+            </section>
+          )}
 
-        {tab === "degrees" && (
-          <div>
+          {tab === "degrees" && (
+          <section className="lte-form-section">
             <div className="lte-list-toolbar">
               <p className="lte-help" style={{ margin: 0 }}>
                 Bằng cấp / văn bằng đào tạo (cử nhân, thạc sĩ, trung cấp…)
@@ -569,13 +628,18 @@ export default function AdminMemberProfileModal({
               ) : null}
             </div>
             {!form.degrees.length ? (
-              <p className="lte-empty">Chưa có bằng cấp.</p>
+              <div className="lte-empty-card compact">
+                <GraduationCap size={22} />
+                <p>Chưa có bằng cấp.</p>
+              </div>
             ) : (
               <div className="lte-tier-list">
                 {form.degrees.map((d, index) => (
                   <div key={index} className="lte-tier-row">
                     <div className="lte-tier-head">
-                      <span>#{index + 1} {d.title || "Bằng cấp"}</span>
+                      <span>
+                        #{index + 1} {d.title || "Bằng cấp"}
+                      </span>
                       {!readOnly ? (
                         <button
                           type="button"
@@ -586,7 +650,7 @@ export default function AdminMemberProfileModal({
                         </button>
                       ) : null}
                     </div>
-                    <div className="lte-form-grid" style={{ gridTemplateColumns: "1.2fr 1fr 1fr" }}>
+                    <div className="lte-form-grid lte-form-grid-3">
                       <Field label="Tên bằng / văn bằng">
                         <input
                           disabled={readOnly}
@@ -628,8 +692,8 @@ export default function AdminMemberProfileModal({
                 ))}
               </div>
             )}
-          </div>
-        )}
+          </section>
+          )}
 
         {tab === "certs" && (
           <div>
@@ -802,7 +866,11 @@ export default function AdminMemberProfileModal({
         )}
 
         {tab === "career" && (
-          <div className="lte-form-grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
+          <section className="lte-form-section">
+            <h4 className="lte-form-section-title">
+              <Briefcase size={16} /> Nghề nghiệp & kinh nghiệm
+            </h4>
+            <div className="lte-form-grid lte-form-grid-2">
             <Field label="Chuyên môn / thể loại">
               <input
                 disabled={readOnly}
@@ -865,9 +933,11 @@ export default function AdminMemberProfileModal({
                 onChange={(e) => set("notes", e.target.value)}
               />
             </Field>
-          </div>
-        )}
-      </form>
+            </div>
+          </section>
+          )}
+        </form>
+      </div>
     </AdminModal>
   );
 }

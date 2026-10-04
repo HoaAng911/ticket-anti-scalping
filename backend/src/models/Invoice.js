@@ -17,6 +17,10 @@ const invoiceItemSchema = new mongoose.Schema(
     ratePercent: { type: Number, default: 10 },
     txHashes: [String],
     tokenIds: [Number],
+    seatId: { type: String, default: "" },
+    seatLabel: { type: String, default: "" },
+    zoneCode: { type: String, default: "" },
+    zoneLabel: { type: String, default: "" },
   },
   { _id: false }
 );

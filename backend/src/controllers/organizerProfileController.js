@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import OrganizerProfile from "../models/OrganizerProfile.js";
+import Event from "../models/Event.js";
 import User from "../models/User.js";
 import { asyncHandler } from "../middlewares/errorHandler.js";
 import {
@@ -14,6 +15,7 @@ import {
   emptyCertificate,
   emptyAward,
 } from "../utils/organizerProfileVn.js";
+import { mapEventsByProfileIds } from "../utils/eventOrganizerProfile.js";
 
 const STATUS_KEYS = PROFILE_STATUSES.map((s) => s.key);
 const ROLE_KEYS = MEMBER_ROLE_TITLES.map((r) => r.key);
@@ -174,10 +176,11 @@ function assertEditable(doc) {
   }
 }
 
-function toAdminDto(doc) {
+function toAdminDto(doc, extras = {}) {
   const o = doc.toObject ? doc.toObject() : doc;
   const linked = o.linkedUser;
   const reviewer = o.reviewedBy;
+  const events = extras.events || [];
   return {
     id: String(o._id),
     profileCode: o.profileCode || "",
@@ -194,6 +197,8 @@ function toAdminDto(doc) {
     legalRepIdNumber: o.legalRepIdNumber || "",
     members: (o.members || []).map(toMemberDto),
     memberCount: (o.members || []).length,
+    events,
+    eventCount: events.length,
     status: o.status || "draft",
     notes: o.notes || "",
     rejectionReason: o.rejectionReason || "",
@@ -210,8 +215,12 @@ function toAdminDto(doc) {
           email: linked.email || "",
           displayName: linked.displayName || "",
           role: linked.role || "",
+          walletAddress: linked.walletAddress || "",
         }
       : null,
+    payoutWallet: o.payoutWallet || "",
+    bankAccount: o.bankAccount || "",
+    bankName: o.bankName || "",
     createdAt: o.createdAt || null,
     updatedAt: o.updatedAt || null,
   };
@@ -219,8 +228,14 @@ function toAdminDto(doc) {
 
 async function populateProfile(id) {
   return OrganizerProfile.findById(id)
-    .populate("linkedUser", "email displayName role")
+    .populate("linkedUser", "email displayName role walletAddress")
     .populate("reviewedBy", "email");
+}
+
+async function toAdminDtoWithEvents(doc) {
+  if (!doc) return null;
+  const eventMap = await mapEventsByProfileIds([doc._id], Event);
+  return toAdminDto(doc, { events: eventMap.get(String(doc._id)) || [] });
 }
 
 export const getOrganizerProfileCatalog = asyncHandler(async (_req, res) => {
@@ -325,10 +340,15 @@ export const listOrganizerProfiles = asyncHandler(async (req, res) => {
   }
 
   const profiles = await OrganizerProfile.find(filter)
-    .populate("linkedUser", "email displayName role")
+    .populate("linkedUser", "email displayName role walletAddress")
     .populate("reviewedBy", "email")
     .sort({ updatedAt: -1 })
     .limit(200);
+
+  const eventMap = await mapEventsByProfileIds(
+    profiles.map((p) => p._id),
+    Event
+  );
 
   const all = await OrganizerProfile.aggregate([
     { $group: { _id: "$status", count: { $sum: 1 } } },
@@ -347,7 +367,9 @@ export const listOrganizerProfiles = asyncHandler(async (req, res) => {
   res.json({
     success: true,
     data: {
-      profiles: profiles.map(toAdminDto),
+      profiles: profiles.map((p) =>
+        toAdminDto(p, { events: eventMap.get(String(p._id)) || [] })
+      ),
       total: profiles.length,
       stats: { ...stats, totalMembers },
     },
@@ -359,7 +381,13 @@ export const getOrganizerProfile = asyncHandler(async (req, res) => {
   if (!doc) {
     return res.status(404).json({ success: false, error: "Không tìm thấy hồ sơ năng lực" });
   }
-  res.json({ success: true, data: { profile: toAdminDto(doc) } });
+  const eventMap = await mapEventsByProfileIds([doc._id], Event);
+  res.json({
+    success: true,
+    data: {
+      profile: toAdminDto(doc, { events: eventMap.get(String(doc._id)) || [] }),
+    },
+  });
 });
 
 export const createOrganizerProfile = asyncHandler(async (req, res) => {
@@ -399,12 +427,15 @@ export const createOrganizerProfile = asyncHandler(async (req, res) => {
     status: "draft",
     notes: String(body.notes || "").trim(),
     linkedUser,
+    payoutWallet: String(body.payoutWallet || "").trim().toLowerCase(),
+    bankAccount: String(body.bankAccount || "").trim(),
+    bankName: String(body.bankName || "").trim(),
   });
 
   const populated = await populateProfile(doc._id);
   res.status(201).json({
     success: true,
-    data: { profile: toAdminDto(populated), message: "Đã tạo hồ sơ năng lực (nháp)." },
+    data: { profile: await toAdminDtoWithEvents(populated), message: "Đã tạo hồ sơ năng lực (nháp)." },
   });
 });
 
@@ -414,14 +445,31 @@ export const updateOrganizerProfile = asyncHandler(async (req, res) => {
     return res.status(404).json({ success: false, error: "Không tìm thấy hồ sơ năng lực" });
   }
 
-  if (doc.status === "approved") {
+  const body = req.body || {};
+  const contentKeys = [
+    "organizationName",
+    "taxCode",
+    "address",
+    "phone",
+    "email",
+    "website",
+    "businessField",
+    "yearsOperating",
+    "legalRepName",
+    "legalRepTitle",
+    "legalRepIdNumber",
+    "notes",
+    "members",
+  ];
+  const hasContentEdit = contentKeys.some((k) => body[k] !== undefined);
+  if (doc.status === "approved" && hasContentEdit) {
     return res.status(400).json({
       success: false,
-      error: "Hồ sơ đã duyệt — hãy chuyển về nháp/từ chối trước khi sửa nội dung.",
+      error:
+        "Hồ sơ đã duyệt — chỉ được sửa ví/tài khoản nhận tiền và tài khoản liên kết. Chuyển về nháp để sửa nội dung khác.",
     });
   }
 
-  const body = req.body || {};
   if (body.organizationName !== undefined) {
     const name = String(body.organizationName || "").trim();
     if (!name) {
@@ -440,11 +488,20 @@ export const updateOrganizerProfile = asyncHandler(async (req, res) => {
     "legalRepTitle",
     "legalRepIdNumber",
     "notes",
+    "bankAccount",
+    "bankName",
   ];
   for (const f of strFields) {
     if (body[f] !== undefined) doc[f] = String(body[f] || "").trim();
   }
   if (body.email !== undefined) doc.email = String(body.email || "").trim().toLowerCase();
+  if (body.payoutWallet !== undefined) {
+    const w = String(body.payoutWallet || "").trim().toLowerCase();
+    if (w && !/^0x[a-f0-9]{40}$/.test(w)) {
+      return res.status(400).json({ success: false, error: "payoutWallet không hợp lệ (cần địa chỉ 0x…)" });
+    }
+    doc.payoutWallet = w;
+  }
   if (body.yearsOperating !== undefined) {
     const years = Number(body.yearsOperating);
     doc.yearsOperating = Number.isFinite(years) && years >= 0 ? years : 0;
@@ -454,15 +511,31 @@ export const updateOrganizerProfile = asyncHandler(async (req, res) => {
     doc.members = sanitizeMembers(body.members);
   }
 
-  if (body.linkedUserId !== undefined) {
-    if (!body.linkedUserId) {
+  if (body.linkedUserId !== undefined || body.linkedUserEmail !== undefined) {
+    if (body.linkedUserId === "" || body.linkedUserId === null) {
       doc.linkedUser = null;
-    } else {
+    } else if (body.linkedUserId) {
       const u = await User.findById(body.linkedUserId).select("_id");
       if (!u) {
         return res.status(400).json({ success: false, error: "linkedUserId không hợp lệ" });
       }
       doc.linkedUser = u._id;
+    } else if (body.linkedUserEmail !== undefined) {
+      const email = String(body.linkedUserEmail || "")
+        .trim()
+        .toLowerCase();
+      if (!email) {
+        doc.linkedUser = null;
+      } else {
+        const u = await User.findOne({ email }).select("_id");
+        if (!u) {
+          return res.status(400).json({
+            success: false,
+            error: `Không tìm thấy tài khoản email ${email}`,
+          });
+        }
+        doc.linkedUser = u._id;
+      }
     }
   }
 
@@ -475,7 +548,7 @@ export const updateOrganizerProfile = asyncHandler(async (req, res) => {
   const populated = await populateProfile(doc._id);
   res.json({
     success: true,
-    data: { profile: toAdminDto(populated), message: "Đã cập nhật hồ sơ năng lực." },
+    data: { profile: await toAdminDtoWithEvents(populated), message: "Đã cập nhật hồ sơ năng lực." },
   });
 });
 
@@ -563,7 +636,7 @@ export const patchOrganizerProfileStatus = asyncHandler(async (req, res) => {
   res.json({
     success: true,
     data: {
-      profile: toAdminDto(populated),
+      profile: await toAdminDtoWithEvents(populated),
       message: messages[next] || "Đã cập nhật trạng thái.",
     },
   });
@@ -612,7 +685,7 @@ export const createOrganizerMember = asyncHandler(async (req, res) => {
     success: true,
     data: {
       member: toMemberDto(created),
-      profile: toAdminDto(populated),
+      profile: await toAdminDtoWithEvents(populated),
       message: `Đã thêm ${member.fullName} (${memberRoleLabel(member.roleTitle)}).`,
     },
   });
@@ -647,7 +720,7 @@ export const updateOrganizerMember = asyncHandler(async (req, res) => {
     success: true,
     data: {
       member: toMemberDto(member),
-      profile: toAdminDto(populated),
+      profile: await toAdminDtoWithEvents(populated),
       message: `Đã cập nhật ${next.fullName}.`,
     },
   });
@@ -674,7 +747,7 @@ export const deleteOrganizerMember = asyncHandler(async (req, res) => {
     success: true,
     data: {
       id: req.params.memberId,
-      profile: toAdminDto(populated),
+      profile: await toAdminDtoWithEvents(populated),
       message: `Đã xóa ${name} khỏi hồ sơ.`,
     },
   });

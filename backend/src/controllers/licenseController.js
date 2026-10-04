@@ -86,7 +86,8 @@ async function ensureLicensePdf(event) {
   const populated =
     event.organizer && typeof event.organizer === "object"
       ? event
-      : await Event.findById(event._id).populate("organizer", "email");
+      : await Event.findById(event._id).populate("organizer", "email")
+      .populate("organizerProfile", "profileCode organizationName status");
 
   const pdf = await generateLicensePdf(populated);
   const next = {
@@ -168,6 +169,7 @@ export const listEventLicenses = asyncHandler(async (req, res) => {
 
   const events = await Event.find(filter)
     .populate("organizer", "email")
+      .populate("organizerProfile", "profileCode organizationName status")
     .sort({ startTime: 1 })
     .limit(Math.min(300, Number(limit) || 100));
 
@@ -203,7 +205,8 @@ export const listEventLicenses = asyncHandler(async (req, res) => {
 });
 
 export const getEventLicense = asyncHandler(async (req, res) => {
-  const event = await Event.findById(req.params.eventId).populate("organizer", "email");
+  const event = await Event.findById(req.params.eventId).populate("organizer", "email")
+      .populate("organizerProfile", "profileCode organizationName status");
   if (!event) return res.status(404).json({ success: false, error: "Không tìm thấy sự kiện" });
   res.json({ success: true, data: toLicenseAdmin(event) });
 });
@@ -259,7 +262,8 @@ export const upsertEventLicense = asyncHandler(async (req, res) => {
   event.operatingLicense = next;
   await event.save();
 
-  let populated = await Event.findById(event._id).populate("organizer", "email");
+  let populated = await Event.findById(event._id).populate("organizer", "email")
+      .populate("organizerProfile", "profileCode organizationName status");
   if (next.licenseNo && ["approved", "pending", "draft"].includes(next.status)) {
     try {
       const { event: withPdf } = await ensureLicensePdf(populated);
@@ -320,7 +324,8 @@ export const patchEventLicenseStatus = asyncHandler(async (req, res) => {
   event.operatingLicense = next;
   await event.save();
 
-  let populated = await Event.findById(event._id).populate("organizer", "email");
+  let populated = await Event.findById(event._id).populate("organizer", "email")
+      .populate("organizerProfile", "profileCode organizationName status");
   if (status === "approved" || status === "pending") {
     try {
       const { event: withPdf } = await ensureLicensePdf(populated);
@@ -364,7 +369,8 @@ export const uploadLicenseDocument = asyncHandler(async (req, res) => {
   event.operatingLicense = next;
   await event.save();
 
-  const populated = await Event.findById(event._id).populate("organizer", "email");
+  const populated = await Event.findById(event._id).populate("organizer", "email")
+      .populate("organizerProfile", "profileCode organizationName status");
   res.json({
     success: true,
     data: toLicenseAdmin(populated),
@@ -398,7 +404,8 @@ export const deleteLicenseDocument = asyncHandler(async (req, res) => {
   };
   await event.save();
 
-  const populated = await Event.findById(event._id).populate("organizer", "email");
+  const populated = await Event.findById(event._id).populate("organizer", "email")
+      .populate("organizerProfile", "profileCode organizationName status");
   res.json({ success: true, data: toLicenseAdmin(populated) });
 });
 
@@ -448,7 +455,8 @@ export const downloadPublicLicenseDocument = asyncHandler(async (req, res) => {
 
 /** Admin: xem / tải PDF hệ thống (bản lab) */
 export const downloadAdminLicensePdf = asyncHandler(async (req, res) => {
-  let event = await Event.findById(req.params.eventId).populate("organizer", "email");
+  let event = await Event.findById(req.params.eventId).populate("organizer", "email")
+      .populate("organizerProfile", "profileCode organizationName status");
   if (!event) return res.status(404).json({ success: false, error: "Không tìm thấy sự kiện" });
   if (!event.operatingLicense?.licenseNo) {
     return res.status(400).json({ success: false, error: "Chưa có số giấy phép để xuất PDF" });
@@ -471,7 +479,8 @@ export const downloadAdminLicensePdf = asyncHandler(async (req, res) => {
 
 /** Public: xem PDF hệ thống nếu đã cấp phép */
 export const downloadPublicLicensePdf = asyncHandler(async (req, res) => {
-  let event = await Event.findById(req.params.id).populate("organizer", "email");
+  let event = await Event.findById(req.params.id).populate("organizer", "email")
+      .populate("organizerProfile", "profileCode organizationName status");
   if (!event) return res.status(404).json({ success: false, error: "Không tìm thấy sự kiện" });
 
   const status = effectiveLicenseStatus(event.operatingLicense);
